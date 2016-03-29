@@ -95,7 +95,7 @@ colnames(mdat)
 
 # Variable exploration
 
-## Dependent variables
+### Dependent variables
 
 ```{r}
 with(mdat, boxplot(plan2actual, clear2actual, ask2actual, oral2actual))
@@ -117,4 +117,4 @@ Might be a good idea to try e.g. Box-Cox transformations to see how they compare
 
 
 
-## Covariates
+### Covariates
