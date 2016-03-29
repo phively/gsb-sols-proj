@@ -1,0 +1,10 @@
+*.Rproj.user
+*.Rproj
+*.Rhistory
+*.RData
+*.csv
+*.txt
+*_cache
+*_files
+.Rproj.user
+README.md
