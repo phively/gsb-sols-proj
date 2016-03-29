@@ -1,0 +1,120 @@
+---
+title: "Data exploration commentary"
+author: "Paul Hively"
+date: "March 29, 2016"
+output: html_document
+---
+
+# Visualizations
+
+The dataset includes all closed (successful or unsuccessful) solicitations with an add date on or after 7/1/2011. Data is obtained from the first tab of the "Booth solicitation history" report (saved as a .csv).
+
+```{r, message=F, cache=T}
+#### Run Rscript1 ----
+source("Rscript1 - data load and transform.R")
+```
+
+Begin with some visualizations of time in each stage:
+
+```{r, echo=F, message=F, warning=F, cache=T}
+Joe.dat2 <- read.csv("modeling.txt", sep="\t", stringsAsFactors=F)
+
+#### Useful packages for data manipulation ----
+library(ggplot2)
+library(lubridate)
+
+#### Days between stages ----
+ggdat <- Joe.dat2 %>%  mutate(
+  plan2clear = as.numeric(difftime(Clear.Dt, Planning.Dt, units="days")),
+  clear2ask = as.numeric(difftime(Ask.Dt, Clear.Dt, units="days")),
+  ask2oral = as.numeric(difftime(Oral.Dt, Ask.Dt, units="days")),
+  ask2actual = as.numeric(difftime(Actual.Dt, Ask.Dt, units="days")),
+  oral2actual = as.numeric(difftime(Actual.Dt, Oral.Dt, units="days")),
+  plan2actual = as.numeric(difftime(Actual.Dt, Planning.Dt, units="days")),
+  giftsize = factor(ifelse(Expected.Amt>=5000000, 5000,
+                    ifelse(Expected.Amt>=1000000, 1000,
+                    ifelse(Expected.Amt>=100000,100,0))),
+  labels=c("Under $100k","$100k+","$1M+","$5M+"))) %>%
+# Only use closed solicitations; Stage 10=Booked, 12=Refused, 14=Cancelled, etc.
+  filter(as.numeric(substr(Final.Sol.Stage,1,2)) >= 10)
+
+## Create plots
+ggplot(ggdat, aes(x=plan2clear, fill=giftsize)) + geom_density(alpha=.5) +
+  facet_grid(giftsize~.) + labs(title="Days from planning to clearance") + xlim(c(0,1000))
+ggplot(ggdat, aes(x=clear2ask, fill=giftsize)) + geom_density(alpha=.5) +
+  facet_grid(giftsize~.) + labs(title="Days from clearance to ask")
+ggplot(ggdat, aes(x=ask2actual, fill=giftsize)) + geom_density(alpha=.5) +
+  facet_grid(giftsize~.) + labs(title="Days from ask to actual")
+ggplot(ggdat, aes(x=plan2actual, fill=giftsize)) + geom_density(alpha=.5) +
+  facet_grid(giftsize~.) + labs(title="Days from planning to actual")
+```
+
+There's extremely obvious bimodality in most cases. Note in particular that while PG is skewed positive overall, there seem to be two groups: takes a while and takes a *long* while. The purple "Days from ask to actual" is about as perfect a mixture of two $N(\mu_{k},\sigma^{2}_{k})$ as I've ever seen. Might be interesting to see if a certain population just takes longer.
+
+```{r, echo=F, warning=F, cache=T}
+library(ggplot2)
+## Ask and oral dates
+ggplot(ggdat[ggdat$giftsize!="$5M+",], aes(x=ask2oral, fill=giftsize)) + geom_density(alpha=.5) + facet_grid(giftsize~.) + labs(title="Days from ask to oral")
+ggplot(ggdat[ggdat$giftsize!="$5M+",], aes(x=oral2actual, fill=giftsize)) + geom_density(alpha=.5) + facet_grid(giftsize~.) + labs(title="Days from oral to actual")
+```
+
+There isn't much data in the oral pledge stage so things are a bit bumpier here.
+
+Here's the cleaned up data file:
+```{r, echo=F, warning=F, cache=T}
+#### Model data cleanup ----
+
+# Function to return end of the fiscal year
+fye <- function(date){ymd(as.character(paste(round(month(date)/13)+year(date),"06","30", sep="-")))}
+
+# Include only closed solicitations with Expected under $5M
+mdat <- Joe.dat2 %>% filter(as.numeric(substr(Final.Sol.Stage,1,2)) >= 10 & Expected.Amt<5000000) %>%
+  # Drop any solicitations where the actual date is before the start date
+  mutate(plan2actual = as.numeric(difftime(Actual.Dt, Planning.Dt, units="days")),
+         clear2actual = as.numeric(difftime(Actual.Dt, Clear.Dt, units="days")),
+         ask2actual = as.numeric(difftime(Actual.Dt, Ask.Dt, units="days")),
+         oral2actual = as.numeric(difftime(Actual.Dt, Oral.Dt, units="days"))) %>%
+  filter(plan2actual>0) %>%
+  # Determine the EOFY at the start of each stage
+  mutate(planFYE = fye(Planning.Dt),
+         clearFYE = fye(Clear.Dt),
+         askFYE = fye(Ask.Dt),
+         oralFYE = fye(Oral.Dt),
+         # Did the solicitation close in the same FY as the stage
+         FY.plan = Actual.Dt <= planFYE,
+         FY.clear = Actual.Dt <= clearFYE,
+         FY.ask = Actual.Dt <= askFYE,
+         FY.oral = Actual.Dt <= oralFYE,
+         planFYE = NULL, clearFYE = NULL, askFYE = NULL, oralFYE = NULL)
+```
+```{r, cache=T}
+colnames(mdat)
+```
+
+**Booked** indicates whether the solicitation came in at $>$$0, and **FY.plan, FY.clear, FY.ask, FY.oral** indicate whether the solicitation closed in the same fiscal year as that stage was reached. Combinations of these five indicators will be the dependent variables. **plan2actual, clear2actual, ask2actual, oral2actual** are measured in days. The other covariates should be self-explanatory.
+
+# Variable exploration
+
+## Dependent variables
+
+```{r}
+with(mdat, boxplot(plan2actual, clear2actual, ask2actual, oral2actual))
+```
+
+Decidedly right-skewed. Try a square root transformation:
+
+```{r}
+with(mdat, boxplot(sqrt(plan2actual), sqrt(clear2actual), sqrt(ask2actual), sqrt(oral2actual)))
+```
+
+Not bad. How's log look?
+
+```{r}
+with(mdat, boxplot(log(plan2actual), log(clear2actual), log(ask2actual), log(oral2actual)))
+```
+
+Might be a good idea to try e.g. Box-Cox transformations to see how they compare.
+
+
+
+## Covariates
