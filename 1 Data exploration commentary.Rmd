@@ -1,9 +1,21 @@
 ---
-title: "Data exploration commentary"
+title: "Data exploration and commentary"
 author: "Paul Hively"
 date: "March 29, 2016"
 output: html_document
 ---
+
+# Problem statement
+
+My goal is to find a way to accurately forecast fundraising revenue.
+
+The existing model has two components. First, the probability a solicitation $S_{i}$ comes in before the end of the fiscal year is a function of the current stage progress $c$ and time until the end of the year $t$, $P(S_{i}=1)=f(c_{i},t)$. The expected FRP in the current fiscal year is this probability times the expected amount, $E(FRP)=P(S_{i}=1)E(S_{i})$.
+
+For the probability model, I assume that there should also be some effect due to the average close rate, season (e.g. people give more in December), planned ask amount, actual ask amount, and potentially interactions. Something like this:
+
+$$P(S_{ij}=1)=f(c_{i},t,\mu,t_{i}^{*},a_{j}^{*},a_{j})$$
+
+It makes sense to start with a few straightforward classifiers, but I'd also like to look into nesting models.
 
 # Visualizations
 
@@ -22,6 +34,8 @@ Joe.dat2 <- read.csv("modeling.txt", sep="\t", stringsAsFactors=F)
 #### Useful packages for data manipulation ----
 library(ggplot2)
 library(lubridate)
+library(tidyr)
+library(knitr)
 
 #### Days between stages ----
 ggdat <- Joe.dat2 %>%  mutate(
@@ -97,22 +111,49 @@ colnames(mdat)
 
 ### Dependent variables
 
-```{r}
-with(mdat, boxplot(plan2actual, clear2actual, ask2actual, oral2actual))
+Do I want to model time to close from each current stage $c_{i}$?
+
+```{r, echo=F, warning=F, cache=T}
+ggdat <- gather(mdat, "Stages","Days", 19:22) #gather() uses tidyr
+ggplot(data=ggdat, aes(x=Stages, y=Days, color=Booked, fill=Booked)) + geom_boxplot(alpha=.4)
+kable(summary(mdat[,19:22]))
 ```
 
-Decidedly right-skewed. Try a square root transformation:
+Negative values indicate a data issue or update. Decidedly right-skewed. Try a square root transformation:
 
-```{r}
-with(mdat, boxplot(sqrt(plan2actual), sqrt(clear2actual), sqrt(ask2actual), sqrt(oral2actual)))
+```{r, echo=F, warning=F, cache=T}
+ggplot(data=ggdat, aes(x=Stages, y=sqrt(Days), color=Booked, fill=Booked)) + geom_boxplot(alpha=.4)
 ```
 
 Not bad. How's log look?
 
-```{r}
-with(mdat, boxplot(log(plan2actual), log(clear2actual), log(ask2actual), log(oral2actual)))
+```{r, echo=F, warning=F, cache=T}
+ggplot(data=ggdat, aes(x=Stages, y=log(Days), color=Booked, fill=Booked)) + geom_boxplot(alpha=.4)
 ```
 
-Might be a good idea to try e.g. Box-Cox transformations to see how they compare.
+Might be a good idea to try e.g. Box-Cox transformations to see how they compare. 
+
+Data counts - do I have enough to do what I want? Is it remotely reasonable to split by month or quarter?
+
+```{r, echo=F, warning=F, cache=T}
+## Group data by month
+tmp <- mdat %>% mutate(Plan=as.numeric(month(Planned.Dt)),
+                       Clear=as.numeric(month(Clear.Dt)),
+                       Ask=as.numeric(month(Ask.Dt)),
+                       Oral=as.numeric(month(Oral.Dt)), Count=1) %>%
+  select(Count, Plan, Clear, Ask, Oral)
+
+# Convert columns into rows
+ggdat <- gather(tmp, "Stage", "Month", 2:5) %>% mutate(Month=as.factor(Month))
+levels(ggdat$Month) <- strtrim(month.name, 3) #use month names
+ggdat$Month <- factor(ggdat$Month, levels(ggdat$Month)[c(7:12,1:6)]) #start in Jul instead of Jan
+ggdat <- aggregate(Count ~ Stage + Month, FUN=sum, data=ggdat)
+# Plot
+ggplot(ggdat, aes(x=Month, y=Count, color=Stage, fill=Stage, group=Stage)) + geom_point() + geom_line()
+# Table
+kable(xtabs(Count ~ Stage + Month, data=ggdat))
+```
+
+Peak plan/ask occur around Nov-Dec and Mar each year. Not nearly as much oral pledge data; usually oral to booked is fast enough that the date isn't captured in the system.
 
 ### Covariates

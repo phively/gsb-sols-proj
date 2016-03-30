@@ -102,18 +102,11 @@ mdat <- Joe.dat2 %>% filter(as.numeric(substr(Final.Sol.Stage,1,2)) >= 10 & Expe
          askFYE = fye(Ask.Dt),
          oralFYE = fye(Oral.Dt),
          # Did the solicitation close in the same FY as the stage
-<<<<<<< HEAD
          FY.plan = Actual.Dt <= planFYE,
          FY.clear = Actual.Dt <= clearFYE,
          FY.ask = Actual.Dt <= askFYE,
          FY.oral = Actual.Dt <= oralFYE,
          planFYE = NULL, clearFYE = NULL, askFYE = NULL, oralFYE = NULL)
-=======
-         Y.plan = Actual.Dt <= planFYE,
-         Y.clear = Actual.Dt <= clearFYE,
-         Y.ask = Actual.Dt <= askFYE,
-         Y.oral = Actual.Dt <= oralFYE)
->>>>>>> master
 
 # For proofing
 # write.table(mdat, file="test.txt", sep="\t", col.names=T, row.names=F)
@@ -135,15 +128,17 @@ with(mdat, length(na.omit(oral2actual)))
 # Don't think I have enough data for an oral model
 tmp <- mdat %>% mutate(Plan=as.numeric(month(Planned.Dt)), Clear=as.numeric(month(Clear.Dt)), Ask=as.numeric(month(Ask.Dt)),
                        Oral=as.numeric(month(Oral.Dt)), Count=1) %>% select(Count, Plan, Clear, Ask, Oral)
+
 tmp <- rbind(xtabs(Count ~ as.numeric(month(Plan)), data=tmp, na.action="na.omit"),
       xtabs(Count ~ as.numeric(month(Clear)), data=tmp, na.action="na.omit"),
       xtabs(Count ~ as.numeric(month(Ask)), data=tmp, na.action="na.omit"),
       xtabs(Count ~ as.numeric(month(Oral)), data=tmp, na.action="na.omit"))
 rownames(tmp) <- c("Plan","Clear","Ask","Oral")
-tmp
+colnames(tmp) <- month.name
+# Table
+(tmp[,c(7:12,1:6)])
 
 ## Explanatory variables
-
 
 #### Logistic regression model for each stage ----
 mod.plan <- glm(Y.plan ~ 1, mdat, family=binomial())
