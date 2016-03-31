@@ -24,18 +24,14 @@ The dataset includes all closed (successful or unsuccessful) solicitations with 
 ```{r, message=F, cache=T}
 #### Run Rscript1 ----
 source("Rscript1 - data load and transform.R")
+#### Useful packages for data manipulation ----
+library(dplyr); library(ggplot2); library(lubridate); library(tidyr); library(knitr); library(scales)
 ```
 
 Begin with some visualizations of time in each stage:
 
 ```{r, echo=F, message=F, warning=F, cache=T}
 Joe.dat2 <- read.csv("modeling.txt", sep="\t", stringsAsFactors=F)
-
-#### Useful packages for data manipulation ----
-library(ggplot2)
-library(lubridate)
-library(tidyr)
-library(knitr)
 
 #### Days between stages ----
 ggdat <- Joe.dat2 %>%  mutate(
@@ -66,7 +62,6 @@ ggplot(ggdat, aes(x=plan2actual, fill=giftsize)) + geom_density(alpha=.5) +
 There's extremely obvious bimodality in most cases. Note in particular that while PG is skewed positive overall, there seem to be two groups: takes a while and takes a *long* while. The purple "Days from ask to actual" is about as perfect a mixture of two $N(\mu_{k},\sigma^{2}_{k})$ as I've ever seen. Might be interesting to see if a certain population just takes longer.
 
 ```{r, echo=F, warning=F, cache=T}
-library(ggplot2)
 ## Ask and oral dates
 ggplot(ggdat[ggdat$giftsize!="$5M+",], aes(x=ask2oral, fill=giftsize)) + geom_density(alpha=.5) + facet_grid(giftsize~.) + labs(title="Days from ask to oral")
 ggplot(ggdat[ggdat$giftsize!="$5M+",], aes(x=oral2actual, fill=giftsize)) + geom_density(alpha=.5) + facet_grid(giftsize~.) + labs(title="Days from oral to actual")
@@ -111,24 +106,24 @@ colnames(mdat)
 
 ### Dependent variables
 
-Do I want to model time to close from each current stage $c_{i}$?
+Do I want to model time to close from each current stage $c_{i}$ as opposed to $P(S_{ij}=1)$?
 
 ```{r, echo=F, warning=F, cache=T}
 ggdat <- gather(mdat, "Stages","Days", 19:22) #gather() uses tidyr
-ggplot(data=ggdat, aes(x=Stages, y=Days, color=Booked, fill=Booked)) + geom_boxplot(alpha=.4)
+ggplot(data=ggdat, aes(x=Stages, y=Days, color=Booked, fill=Booked)) + geom_boxplot(alpha=.4, position=position_dodge(width=1))
 kable(summary(mdat[,19:22]))
 ```
 
 Negative values indicate a data issue or update. Decidedly right-skewed. Try a square root transformation:
 
 ```{r, echo=F, warning=F, cache=T}
-ggplot(data=ggdat, aes(x=Stages, y=sqrt(Days), color=Booked, fill=Booked)) + geom_boxplot(alpha=.4)
+ggplot(data=ggdat, aes(x=Stages, y=sqrt(Days), color=Booked, fill=Booked)) + geom_boxplot(alpha=.4, position=position_dodge(width=1))
 ```
 
 Not bad. How's log look?
 
 ```{r, echo=F, warning=F, cache=T}
-ggplot(data=ggdat, aes(x=Stages, y=log(Days), color=Booked, fill=Booked)) + geom_boxplot(alpha=.4)
+ggplot(data=ggdat, aes(x=Stages, y=log(Days), color=Booked, fill=Booked)) + geom_boxplot(alpha=.4, position=position_dodge(width=1))
 ```
 
 Might be a good idea to try e.g. Box-Cox transformations to see how they compare. 
@@ -141,19 +136,41 @@ tmp <- mdat %>% mutate(Plan=as.numeric(month(Planned.Dt)),
                        Clear=as.numeric(month(Clear.Dt)),
                        Ask=as.numeric(month(Ask.Dt)),
                        Oral=as.numeric(month(Oral.Dt)), Count=1) %>%
-  select(Count, Plan, Clear, Ask, Oral)
+  select(Count, Plan, Clear, Ask, Oral, Booked)
 
 # Convert columns into rows
-ggdat <- gather(tmp, "Stage", "Month", 2:5) %>% mutate(Month=as.factor(Month))
-levels(ggdat$Month) <- strtrim(month.name, 3) #use month names
-ggdat$Month <- factor(ggdat$Month, levels(ggdat$Month)[c(7:12,1:6)]) #start in Jul instead of Jan
-ggdat <- aggregate(Count ~ Stage + Month, FUN=sum, data=ggdat)
+tmp2 <- gather(tmp, "Stage", "Month", 2:5) %>% mutate(Month=as.factor(Month))
+levels(tmp2$Month) <- strtrim(month.name, 3) #use month names
+tmp2$Month <- factor(tmp2$Month, levels(tmp2$Month)[c(7:12,1:6)]) #start in Jul instead of Jan
+ggdat <- aggregate(Count ~ Stage + Month, FUN=sum, data=tmp2)
 # Plot
-ggplot(ggdat, aes(x=Month, y=Count, color=Stage, fill=Stage, group=Stage)) + geom_point() + geom_line()
+ggplot(ggdat, aes(x=Month, y=Count, color=Stage, fill=Stage, group=Stage)) + geom_point() + geom_line() + labs(y="Count of solicitations entering stage") + theme(text=element_text(size=12))
 # Table
 kable(xtabs(Count ~ Stage + Month, data=ggdat))
 ```
 
-Peak plan/ask occur around Nov-Dec and Mar each year. Not nearly as much oral pledge data; usually oral to booked is fast enough that the date isn't captured in the system.
+Peak plan/ask occur around Nov-Dec and Mar each year. Not nearly as much oral pledge data; usually oral to booked is fast enough that the date isn't captured in the system. (The current model rolls ask and oral together.)
+
+Finally, let's take a look at the booked versus declined solicitations by stage by fiscal year closed.
+
+```{r, echo=F, warning=F, cache=T}
+## Plot count of solicitations booked by month and stage
+ggdat <- na.omit(tmp2)
+ggplot(ggdat, aes(x=Month, color=Booked, fill=Booked)) + geom_bar(alpha=.4) + labs(y="Count of solicitations entering stage") + theme(text=element_text(size=12)) + facet_grid(Stage~.)
+## Proportions
+ggdat <- aggregate(Count ~ Stage + Month + Booked, FUN=sum, data=na.omit(tmp2))
+tmp3 <- aggregate(Count ~ Stage + Month, FUN=sum, data=na.omit(tmp2))
+# Convert each count in ggdat to a percent
+for(i in 1:dim(ggdat)[1]){
+  ggdat$Prop[i] <- ggdat$Count[i]/(tmp3$Count[tmp3$Stage==ggdat$Stage[i] & tmp3$Month==ggdat$Month[i]])
+}
+ggplot(ggdat, aes(x=Month, y=Prop, color=Booked, fill=Booked, group=Booked)) + geom_point() + geom_line(alpha=.4) + labs(y="Proportion of solicitations entering stage") + theme(text=element_text(size=12)) + facet_grid(Stage~.) + scale_y_continuous(labels=percent)
+```
+
+This is fascinating; a solicitation entering plan or clear in December through February is most likely to be refused rather than booked. Is there a specific year driving that?
+
+```{r, echo=F, warning=F, cache=T}
+## Redo previous % plot for each fiscal year
+```
 
 ### Covariates
