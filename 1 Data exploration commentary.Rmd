@@ -163,14 +163,63 @@ tmp3 <- aggregate(Count ~ Stage + Month, FUN=sum, data=na.omit(tmp2))
 # Convert each count in ggdat to a percent
 for(i in 1:dim(ggdat)[1]){
   ggdat$Prop[i] <- ggdat$Count[i]/(tmp3$Count[tmp3$Stage==ggdat$Stage[i] & tmp3$Month==ggdat$Month[i]])
+  # Binomial CIs, se^2 = p(1-p)/n
+  ggdat$ci[i] <- sqrt((ggdat$Prop[i]*(1-ggdat$Prop[i]))/tmp3$Count[tmp3$Stage==ggdat$Stage[i] & tmp3$Month==ggdat$Month[i]])
 }
-ggplot(ggdat, aes(x=Month, y=Prop, color=Booked, fill=Booked, group=Booked)) + geom_point() + geom_line(alpha=.4) + labs(y="Proportion of solicitations entering stage") + theme(text=element_text(size=12)) + facet_grid(Stage~.) + scale_y_continuous(labels=percent)
+## Plot
+ggplot(ggdat, aes(x=Month, y=Prop, color=Booked, fill=Booked, group=Booked)) + geom_point() + geom_line(alpha=.4) + geom_ribbon(aes(ymin=Prop-ci, ymax=Prop+ci), alpha=.15) + labs(y="Proportion of solicitations entering stage") + theme(text=element_text(size=12)) + facet_grid(Stage~.) + scale_y_continuous(labels=percent)
 ```
 
-This is fascinating; a solicitation entering plan or clear in December through February is most likely to be refused rather than booked. Is there a specific year driving that?
+Confidence bands are based on the variance for a binomial random variable, $\sqrt{\frac{p(1-p)}{n}}$ (assuming independence).
+
+This is fascinating; a solicitation entering plan or clear in December through February is more likely to be refused rather than booked. Is there a specific year driving that?
 
 ```{r, echo=F, warning=F, cache=T}
-## Redo previous % plot for each fiscal year
+## Redo previous plots for each fiscal year
+tmp <- mdat %>% select(Planned.Dt, Clear.Dt, Ask.Dt, Oral.Dt, Booked) %>%
+  mutate(Count=1, PlanY=as.numeric(year(Planned.Dt)), Plan=as.numeric(month(Planned.Dt)),
+         ClearY=as.numeric(year(Clear.Dt)), Clear=as.numeric(month(Clear.Dt)),
+         AskY=as.numeric(year(Ask.Dt)), Ask=as.numeric(month(Ask.Dt)),
+         OralY=as.numeric(year(Oral.Dt)), Oral=as.numeric(month(Oral.Dt))) %>%
+  select(-c(1:4)) #Drop actual dates which are now unneeded
+# Spread month and year
+tmp2 <- gather(tmp, "Stage", "Month", seq(4,10,by=2)) %>% gather("StageY", "Year", 3:6) %>%
+  mutate(Month=as.factor(Month), Year=as.factor(Year), StageY=NULL)
+levels(tmp2$Month) <- strtrim(month.name, 3) #use month names
+tmp2$Month <- factor(tmp2$Month, levels(tmp2$Month)[c(7:12,1:6)]) #start in Jul instead of Jan
+## Redo previous # plot for each fiscal year
+ggdat <- aggregate(Count ~ Stage + Month + Year, FUN=sum, data=tmp2)
+ggplot(ggdat, aes(x=Month, y=Count, color=Stage, fill=Stage, group=Stage)) + geom_point() + geom_line() + labs(y="Count of solicitations entering stage by year") + facet_grid(Year~.) + theme(text=element_text(size=12))
 ```
 
+2010, 2016, 2017 don't have enough data so they're dropped from the second plot. 2011 didn't have much stage progress in the second half of the year.
+
+```{r, echo=F, warning=F, cache=T}
+## Data for plotting %s
+ggdat <- aggregate(Count ~ Stage + Month + Year + Booked, FUN=sum, data=na.omit(tmp2))
+tmp3 <- aggregate(Count ~ Stage + Month + Year, FUN=sum, data=na.omit(tmp2))
+# Convert each count in ggdat to a percent
+for(i in 1:dim(ggdat)[1]){
+  ggdat$Prop[i] <- ggdat$Count[i]/(tmp3$Count[tmp3$Stage==ggdat$Stage[i] & tmp3$Month==ggdat$Month[i] & tmp3$Year==ggdat$Year[i]])
+    # Binomial CIs, se^2 = p(1-p)/n
+  ggdat$ci[i] <- sqrt((ggdat$Prop[i]*(1-ggdat$Prop[i]))/tmp3$Count[tmp3$Stage==ggdat$Stage[i] & tmp3$Month==ggdat$Month[i] & tmp3$Year==ggdat$Year[i]])
+}
+## Plot
+ggplot(ggdat[!(ggdat$Year %in% c("2010","2016","2017")),], aes(x=Month, y=Prop, color=Booked, fill=Booked, group=Booked)) + geom_point() + geom_line(alpha=.4) + geom_ribbon(aes(ymin=Prop-ci, ymax=Prop+ci), alpha=.15) + labs(y="Proportion of solicitations entering stage") + facet_grid(Stage~Year) + scale_y_continuous(labels=percent) + theme(axis.text.x=element_text(angle=90, vjust=.4))
+```
+
+Looks like 2012 was a good year; other than that it's normal to have lots of duds in those winter months
+
 ### Covariates
+
+I'm thinking time to close is not the natural outcome measure; a model predicting time to close can't be swapped out directly with the existing one. Recall from above:
+
+> For the probability model, I assume that there should also be some effect due to the average close rate, season (e.g. people give more in December), planned ask amount, actual ask amount, and potentially interactions. Something like this:
+>
+> $$P(S_{ij}=1)=f(c_{i},t,\mu,t_{i}^{*},a_{j}^{*},a_{j})$$
+
+Take a look at each of these variables against Booked.
+
+```{r, echo=F, warning=F, cache=T}
+
+```
