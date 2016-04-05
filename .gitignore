@@ -6,6 +6,7 @@
 *.txt
 *_cache
 *_files
+*.html
 .Rproj.user
 README.md
 Git Bash.lnk
