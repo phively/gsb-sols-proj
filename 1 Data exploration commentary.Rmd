@@ -174,7 +174,7 @@ Confidence bands are based on the variance for a binomial random variable, $\sqr
 
 This is fascinating; a solicitation entering plan or clear in December through February is more likely to be refused rather than booked. Is there a specific year driving that?
 
-```{r, echo=F, warning=F, cache=T}
+```{r, echo=F, warning=F, error=F, cache=T}
 ## Redo previous plots for each fiscal year
 tmp <- mdat %>% select(Planned.Dt, Clear.Dt, Ask.Dt, Oral.Dt, Booked) %>%
   mutate(Count=1, PlanY=as.numeric(year(Planned.Dt)), Plan=as.numeric(month(Planned.Dt)),
