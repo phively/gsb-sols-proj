@@ -21,9 +21,11 @@ It makes sense to start with a few straightforward classifiers, but I'd also lik
 
 The dataset includes all closed (successful or unsuccessful) solicitations with an add date on or after 7/1/2011. Data is obtained from the first tab of the "Booth solicitation history" report (saved as a .csv).
 
-```{r, message=F, cache=T}
+```{r, message=F, cache=F}
 #### Run Rscript0 to load useful packages ----
 source("Rscript0 - libraries.R")
+```
+```{r, message=F, cache=T}
 #### Run Rscript1 to load data ----
 source("Rscript1 - data load and transform.R")
 ```
@@ -189,10 +191,10 @@ levels(tmp2$Month) <- strtrim(month.name, 3) #use month names
 tmp2$Month <- factor(tmp2$Month, levels(tmp2$Month)[c(7:12,1:6)]) #start in Jul instead of Jan
 ## Redo previous # plot for each fiscal year
 ggdat <- aggregate(Count ~ Stage + Month + Year, FUN=sum, data=tmp2)
-ggplot(ggdat, aes(x=Month, y=Count, color=Stage, fill=Stage, group=Stage)) + geom_point() + geom_line() + labs(y="Count of solicitations entering stage by year") + facet_grid(Year~.) + theme(text=element_text(size=12))
+ggplot(ggdat[ggdat$Year!="2010",], aes(x=Month, y=Count, color=Stage, fill=Stage, group=Stage)) + geom_point() + geom_line() + labs(y="Count of solicitations entering stage by year") + facet_grid(Year~.) + theme(text=element_text(size=12))
 ```
 
-2010, 2016, 2017 don't have enough data so they're dropped from the second plot. 2011 didn't have much stage progress in the second half of the year.
+2010, 2016, 2017 don't have enough data so they're dropped. 2011 didn't have much stage progress in the second half of the year.
 
 ```{r, echo=F, warning=F, cache=T}
 ## Data for plotting %s
@@ -220,6 +222,42 @@ I'm thinking time to close is not the natural outcome measure; a model predictin
 
 Take a look at each of these variables against Booked.
 
-```{r, echo=F, warning=F, cache=T}
+#### Ask Amount
 
+```{r, echo=F, warning=F, cache=T}
+g1 <- ggplot(mdat, aes(x=Ask.Amt, y=..count.., color=Booked, fill=Booked)) + geom_density(alpha=.5) + labs(x="Ask amount", y="Count", title=expression(paste("Close counts by ",Log[10]," ask amount"))) + scale_x_continuous(trans="log10", breaks=10^seq(1:7), labels=scales::dollar) #+ facet_grid(Booked~.)
+# Look at relative frequencies
+g2 <- ggplot(mdat, aes(x=Ask.Amt, y=..count.., color=Booked, fill=Booked)) + geom_hline(yintercept=.5, alpha=.5) + geom_density(alpha=.5, position="fill") + labs(x="Ask amount", y="Probability", title=expression(paste("Close rates by ",Log[10]," ask amount"))) + scale_x_continuous(trans="log10", breaks=10^seq(1:7), labels=scales::dollar)
+# Final layout
+grid.arrange(g1, g2)
 ```
+
+Above 50% close rate at every level, but the poorest close rate is between the $100k to $1M levels. There's obviously nonlinearity; a cubic polynomial might be a good approximation?
+
+#### Ask Amount Different From Planned Amount
+
+```{r, echo=F, warning=F, cache=T}
+g1 <- ggplot(mdat, aes(x=(Ask.Amt/Planned.Amt), y=..count.., color=Booked, fill=Booked)) + geom_density(alpha=.5) + labs(x="Ask amount", y="Count", title="Close counts by Ask/Planned") + scale_x_continuous(trans="log10", labels=scales::percent)
+# Look at relative frequencies
+g2 <- ggplot(mdat, aes(x=(Ask.Amt/Planned.Amt), y=..count.., color=Booked, fill=Booked)) + geom_hline(yintercept=.5, alpha=.5) + geom_density(alpha=.5, position="fill") + labs(x="Ask amount", y="Count", title="Close rates by Ask/Planned") + scale_x_continuous(trans="log10", labels=scales::percent)
+# Final layout
+grid.arrange(g1, g2)
+```
+
+Too choppy to really see much of anything; most solicitations are asked at the planned amount and there are so few in the tails that there isn't much interesting to say. What if we just look at a few binned thresholds?
+
+```{r, echo=F, warning=F, cache=T}
+# Custom binning
+bins <- c(0,.25,.5,.75,.99,1.01,1.5,2,2.5,3)
+## If I keep copy-pasting this it should really go in its own .R script
+g1 <- ggplot(mdat, aes(x=Ask.Amt/Planned.Amt, color=Booked, fill=Booked)) + geom_histogram(alpha=.5, breaks=bins) + labs(x="Ask amount", y="Count", title="Close counts by Ask/Planned") + scale_x_continuous(labels=scales::percent, breaks=c(seq(0,1,by=.25), seq(1,max(bins),by=.5)))
+# Look at relative frequencies
+g2 <- ggplot(mdat, aes(x=Ask.Amt/Planned.Amt, color=Booked, fill=Booked)) + geom_hline(yintercept=.5, alpha=.5) + geom_histogram(alpha=.5, position="fill", breaks=bins) + labs(x="Ask amount", y="Count", title="Close rates by Ask/Planned") + scale_x_continuous(labels=scales::percent, breaks=c(seq(0,1,by=.25), seq(1,max(bins),by=.5)))
+# Final layout
+grid.arrange(g1, g2)
+```
+
+If someone asks slightly more than the planned ask amount it's a good sign that the talks were going well; otherwise there doesn't seem to be a lot to see here.
+
+#### Stage Progression
+
