@@ -96,7 +96,12 @@ mdat <- Joe.dat2 %>% filter(as.numeric(substr(Final.Sol.Stage,1,2)) >= 10 & Expe
          FY.clear = Actual.Dt <= clearFYE,
          FY.ask = Actual.Dt <= askFYE,
          FY.oral = Actual.Dt <= oralFYE,
-         planFYE = NULL, clearFYE = NULL, askFYE = NULL, oralFYE = NULL)
+         planFYE = NULL, clearFYE = NULL, askFYE = NULL, oralFYE = NULL) %>%
+  # Add indicators for solicitations that booked in the same year they hit the stage
+  mutate(FY.Plan.Book = FY.plan & Booked,
+         FY.Clear.Book = FY.clear & Booked,
+         FY.Ask.Book = FY.ask & Booked,
+         FY.Oral.Book = FY.oral & Booked)
 ```
 ```{r, cache=T}
 colnames(mdat)
@@ -106,7 +111,7 @@ colnames(mdat)
 
 # Variable exploration
 
-### Dependent variables
+## Dependent variables
 
 Do I want to model time to close from each current stage $c_{i}$ as opposed to $P(S_{ij}=1)$?
 
@@ -141,12 +146,11 @@ tmp <- mdat %>% mutate(Plan=as.numeric(month(Planned.Dt)),
   select(Count, Plan, Clear, Ask, Oral, Booked)
 
 # Convert columns into rows
-tmp2 <- gather(tmp, "Stage", "Month", 2:5) %>% mutate(Month=as.factor(Month))
-levels(tmp2$Month) <- strtrim(month.name, 3) #use month names
+tmp2 <- gather(tmp, "Stage", "Month", 2:5) %>% mutate(Month=factor(Month, labels=strtrim(month.name, 3)))
 tmp2$Month <- factor(tmp2$Month, levels(tmp2$Month)[c(7:12,1:6)]) #start in Jul instead of Jan
-ggdat <- aggregate(Count ~ Stage + Month, FUN=sum, data=tmp2)
+ggdat <- tmp2 %>% group_by(Stage, Month) %>% summarise(Count=sum(Count))
 # Plot
-ggplot(ggdat, aes(x=Month, y=Count, color=Stage, fill=Stage, group=Stage)) + geom_point() + geom_line() + labs(y="Count of solicitations entering stage") + theme(text=element_text(size=12))
+ggplot(na.omit(ggdat), aes(x=Month, y=Count, color=Stage, fill=Stage, group=Stage)) + geom_point() + geom_line() + labs(y="Count of solicitations entering stage") + theme(text=element_text(size=12))
 # Table
 kable(xtabs(Count ~ Stage + Month, data=ggdat))
 ```
@@ -160,8 +164,8 @@ Finally, let's take a look at the booked versus declined solicitations by stage 
 ggdat <- na.omit(tmp2)
 ggplot(ggdat, aes(x=Month, color=Booked, fill=Booked)) + geom_bar(alpha=.4) + labs(y="Count of solicitations entering stage") + theme(text=element_text(size=12)) + facet_grid(Stage~.)
 ## Proportions
-ggdat <- aggregate(Count ~ Stage + Month + Booked, FUN=sum, data=na.omit(tmp2))
-tmp3 <- aggregate(Count ~ Stage + Month, FUN=sum, data=na.omit(tmp2))
+ggdat <- na.omit(tmp2) %>% group_by(Stage, Month, Booked) %>% summarise(Count=sum(Count))
+tmp3 <- na.omit(tmp2) %>% group_by(Stage, Month) %>% summarise(Count=sum(Count))
 # Convert each count in ggdat to a percent
 for(i in 1:dim(ggdat)[1]){
   ggdat$Prop[i] <- ggdat$Count[i]/(tmp3$Count[tmp3$Stage==ggdat$Stage[i] & tmp3$Month==ggdat$Month[i]])
@@ -190,7 +194,7 @@ tmp2 <- gather(tmp, "Stage", "Month", seq(4,10,by=2)) %>% gather("StageY", "Year
 levels(tmp2$Month) <- strtrim(month.name, 3) #use month names
 tmp2$Month <- factor(tmp2$Month, levels(tmp2$Month)[c(7:12,1:6)]) #start in Jul instead of Jan
 ## Redo previous # plot for each fiscal year
-ggdat <- aggregate(Count ~ Stage + Month + Year, FUN=sum, data=tmp2)
+ggdat <- na.omit(tmp2) %>% group_by(Stage, Month, Year) %>% summarise(Count=sum(Count))
 ggplot(ggdat[ggdat$Year!="2010",], aes(x=Month, y=Count, color=Stage, fill=Stage, group=Stage)) + geom_point() + geom_line() + labs(y="Count of solicitations entering stage by year") + facet_grid(Year~.) + theme(text=element_text(size=12))
 ```
 
@@ -198,8 +202,8 @@ ggplot(ggdat[ggdat$Year!="2010",], aes(x=Month, y=Count, color=Stage, fill=Stage
 
 ```{r, echo=F, warning=F, cache=T}
 ## Data for plotting %s
-ggdat <- aggregate(Count ~ Stage + Month + Year + Booked, FUN=sum, data=na.omit(tmp2))
-tmp3 <- aggregate(Count ~ Stage + Month + Year, FUN=sum, data=na.omit(tmp2))
+ggdat <- na.omit(tmp2) %>% group_by(Stage, Month, Year, Booked) %>% summarise(Count=sum(Count))
+tmp3 <- na.omit(tmp2) %>% group_by(Stage, Month, Year) %>% summarise(Count=sum(Count))
 # Convert each count in ggdat to a percent
 for(i in 1:dim(ggdat)[1]){
   ggdat$Prop[i] <- ggdat$Count[i]/(tmp3$Count[tmp3$Stage==ggdat$Stage[i] & tmp3$Month==ggdat$Month[i] & tmp3$Year==ggdat$Year[i]])
@@ -212,7 +216,7 @@ ggplot(ggdat[!(ggdat$Year %in% c("2010","2016","2017")),], aes(x=Month, y=Prop, 
 
 Looks like 2012 was a good year; other than that it's normal to have lots of duds in those winter months
 
-### Covariates
+## Discrete covariates
 
 I'm thinking time to close is not the natural outcome measure; a model predicting time to close can't be swapped out directly with the existing one. Recall from above:
 
@@ -220,9 +224,9 @@ I'm thinking time to close is not the natural outcome measure; a model predictin
 >
 > $$P(S_{ij}=1)=f(c_{i},t,\mu,t_{i}^{*},a_{j}^{*},a_{j})$$
 
-Take a look at each of these variables against Booked.
+Take a look at each of these additional variables against Booked.
 
-#### Ask Amount
+### Ask Amount
 
 ```{r, echo=F, warning=F, cache=T}
 g1 <- ggplot(mdat, aes(x=Ask.Amt, y=..count.., color=Booked, fill=Booked)) + geom_density(alpha=.5) + labs(x="Ask amount", y="Count", title=expression(paste("Close counts by ",Log[10]," ask amount"))) + scale_x_continuous(trans="log10", breaks=10^seq(1:7), labels=scales::dollar) #+ facet_grid(Booked~.)
@@ -234,12 +238,14 @@ grid.arrange(g1, g2)
 
 Above 50% close rate at every level, but the poorest close rate is between the $100k to $1M levels. There's obviously nonlinearity; a cubic polynomial might be a good approximation?
 
-#### Ask Amount Different From Planned Amount
+### Ask Amount/Planned Amount
+
+I think differences in planned ask versus actual ask amounts might indicate trouble. How does the ratio of actual ask over planned ask look?
 
 ```{r, echo=F, warning=F, cache=T}
 g1 <- ggplot(mdat, aes(x=(Ask.Amt/Planned.Amt), y=..count.., color=Booked, fill=Booked)) + geom_density(alpha=.5) + labs(x="Ask amount", y="Count", title="Close counts by Ask/Planned") + scale_x_continuous(trans="log10", labels=scales::percent)
 # Look at relative frequencies
-g2 <- ggplot(mdat, aes(x=(Ask.Amt/Planned.Amt), y=..count.., color=Booked, fill=Booked)) + geom_hline(yintercept=.5, alpha=.5) + geom_density(alpha=.5, position="fill") + labs(x="Ask amount", y="Count", title="Close rates by Ask/Planned") + scale_x_continuous(trans="log10", labels=scales::percent)
+g2 <- ggplot(mdat, aes(x=(Ask.Amt/Planned.Amt), y=..count.., color=Booked, fill=Booked)) + geom_hline(yintercept=.5, alpha=.5) + geom_density(alpha=.5, position="fill") + labs(x="Ask amount", y="Probability", title="Close rates by Ask/Planned") + scale_x_continuous(trans="log10", labels=scales::percent)
 # Final layout
 grid.arrange(g1, g2)
 ```
@@ -250,14 +256,57 @@ Too choppy to really see much of anything; most solicitations are asked at the p
 # Custom binning
 bins <- c(0,.25,.5,.75,.99,1.01,1.5,2,2.5,3)
 ## If I keep copy-pasting this it should really go in its own .R script
-g1 <- ggplot(mdat, aes(x=Ask.Amt/Planned.Amt, color=Booked, fill=Booked)) + geom_histogram(alpha=.5, breaks=bins) + labs(x="Ask amount", y="Count", title="Close counts by Ask/Planned") + scale_x_continuous(labels=scales::percent, breaks=c(seq(0,1,by=.25), seq(1,max(bins),by=.5)))
+g1 <- ggplot(mdat, aes(x=Ask.Amt/Planned.Amt, color=Booked, fill=Booked)) + geom_histogram(alpha=.5, breaks=bins, position="identity") + labs(x="Ask amount", y="Count", title="Close counts by Ask/Planned") + scale_x_continuous(labels=scales::percent, breaks=c(seq(0,1,by=.25), seq(1.5,max(bins),by=.5)))
 # Look at relative frequencies
-g2 <- ggplot(mdat, aes(x=Ask.Amt/Planned.Amt, color=Booked, fill=Booked)) + geom_hline(yintercept=.5, alpha=.5) + geom_histogram(alpha=.5, position="fill", breaks=bins) + labs(x="Ask amount", y="Count", title="Close rates by Ask/Planned") + scale_x_continuous(labels=scales::percent, breaks=c(seq(0,1,by=.25), seq(1,max(bins),by=.5)))
+g2 <- ggplot(mdat, aes(x=Ask.Amt/Planned.Amt, color=Booked, fill=Booked)) + geom_hline(yintercept=.5, alpha=.5) + geom_histogram(alpha=.5, position="fill", breaks=bins) + labs(x="Ask amount", y="Probability", title="Close rates by Ask/Planned") + scale_x_continuous(labels=scales::percent, breaks=c(seq(0,1,by=.25), seq(1.5,max(bins),by=.5)))
 # Final layout
 grid.arrange(g1, g2)
 ```
 
-If someone asks slightly more than the planned ask amount it's a good sign that the talks were going well; otherwise there doesn't seem to be a lot to see here.
+If someone asks slightly more than the planned ask amount it's a good sign that the talks were going well; otherwise there doesn't seem to be much to see here. The 25%-50% bin might also be statistically significant; don't know about the others given the small sample sizes.
 
-#### Stage Progression
+## Stage progression within a single year
 
+Given that a solicitation reaches a certain stage, how likely is it to close that year, whether or not it's booked?
+
+```{r, echo=F, warning=F, cache=T}
+ggdat <- na.omit(mdat %>% mutate(Count=1) %>% group_by(FY.plan, FY.clear, FY.ask, FY.oral) %>% summarise(Count=sum(Count)) %>% gather("Stage","Closed",1:4) %>% group_by(Stage, Closed) %>% summarise(Count=sum(Count)))
+levels(ggdat$Stage) <- c("Plan","Clear","Ask","Oral")
+# Plot of counts
+ggplot(ggdat, aes(x=Stage, y=Count, fill=Closed)) + geom_bar(stat="identity", position="dodge", alpha=.5)
+# Plot of probabilities
+ggdat <- ggdat %>% mutate(n=sum(Count), Proportion=Count/n, ci=sqrt(Proportion*(1-Proportion)/n))
+ggplot(ggdat, aes(x=Stage, y=Proportion, color=Closed, fill=Closed)) + geom_point(stat="identity", alpha=.5, size=2) + geom_linerange(aes(ymin=Proportion-ci, ymax=Proportion+ci), alpha=.25, size=3) + labs(y="Probability") + scale_y_continuous(limits=c(0,1), breaks=seq(0,1,by=.2))
+kable(ggdat[,c("Stage","Closed","Count","Proportion")], digits=2)
+```
+
+Ask and Clear are closer than I would have thought. What about if we look at whether they were both closed _and_ booked that year?
+
+```{r, echo=F, warning=F, cache=T}
+ggdat <- na.omit(mdat %>% mutate(Count=1) %>% group_by(FY.Plan.Book, FY.Clear.Book, FY.Ask.Book, FY.Oral.Book) %>% summarise(Count=sum(Count)) %>% gather("Stage","Booked.In.FY",1:4) %>% group_by(Stage, Booked.In.FY) %>% summarise(Count=sum(Count)))
+levels(ggdat$Stage) <- c("Plan","Clear","Ask","Oral")
+# Plot of counts
+ggplot(ggdat, aes(x=Stage, y=Count, fill=Booked.In.FY)) + geom_bar(stat="identity", position="dodge", alpha=.5)
+# Plot of probabilities
+ggdat <- ggdat %>% mutate(n=sum(Count), Proportion=Count/n, ci=sqrt(Proportion*(1-Proportion)/n))
+ggplot(ggdat, aes(x=Stage, y=Proportion, color=Booked.In.FY, fill=Booked.In.FY)) + geom_point(stat="identity", alpha=.5, size=2) + geom_linerange(aes(ymin=Proportion-ci, ymax=Proportion+ci), alpha=.25, size=3) + labs(y="Probability") + scale_y_continuous(limits=c(0,1), breaks=seq(0,1,by=.2))
+kable(ggdat[,c("Stage","Booked.In.FY","Count","Proportion")], digits=2)
+```
+
+Curious; there really doesn't seem to be a discernible difference between clear and ask.
+
+The last thing to check is these hybrid "reached stage and closed" indicators by month.
+
+```{r, echo=F, warning=F, cache=T}
+# Data manupulation
+ggdat <- na.omit(mdat %>% mutate(Plan=as.numeric(month(Planned.Dt)), Clear=as.numeric(month(Clear.Dt)), Ask=as.numeric(month(Ask.Dt)), Oral=as.numeric(month(Oral.Dt)), Count=1) %>% select(Count, Plan, Clear, Ask, Oral, FY.Plan.Book, FY.Clear.Book, FY.Ask.Book, FY.Oral.Book) %>% gather("Stage", "Month", 2:5) %>% gather("Outcome", "Booked.In.FY", 2:5) %>% 
+  # Need to get rid of mismatched rows, e.g. where Stage=Ask and Outcome=FY.Clear.Book
+  filter((Stage=="Plan" & Outcome=="FY.Plan.Book") | (Stage=="Clear" & Outcome=="FY.Clear.Book") | (Stage=="Ask" & Outcome=="FY.Ask.Book") | (Stage=="Oral" & Outcome=="FY.Oral.Book")) %>% mutate(Month=as.factor(Month)) %>% group_by(Stage, Month, Booked.In.FY) %>% summarise(Count=sum(Count)))
+
+tmp <- mdat %>% mutate(Plan=as.numeric(month(Planned.Dt)), Clear=as.numeric(month(Clear.Dt)), Ask=as.numeric(month(Ask.Dt)), Oral=as.numeric(month(Oral.Dt)), Count=1) %>% select(Count, Plan, Clear, Ask, Oral, FY.Plan.Book, FY.Clear.Book, FY.Ask.Book, FY.Oral.Book) #%>% gather("Stage", "Month", 2:5) %>% gather("Outcome", "Booked.In.FY", 2:5) %>% filter((Stage=="Plan" & Outcome=="FY.Plan.Book") | (Stage=="Clear" & Outcome=="FY.Clear.Book") | (Stage=="Ask" & Outcome=="FY.Ask.Book") | (Stage=="Oral" & Outcome=="FY.Oral.Book"))
+  
+
+write.table(tmp, "tmp2.txt", sep="\t", row.names=F)
+
+write.table(mdat, "tmp.txt", sep="\t", row.names=F)
+```
