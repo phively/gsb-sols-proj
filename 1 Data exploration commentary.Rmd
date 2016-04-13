@@ -139,7 +139,7 @@ Data counts - do I have enough to do what I want? Is it remotely reasonable to s
 
 ```{r, echo=F, warning=F, cache=T}
 ## Group data by month
-tmp <- mdat %>% mutate(Plan=as.numeric(month(Planned.Dt)),
+tmp <- mdat %>% mutate(Plan=as.numeric(month(Planning.Dt)),
                        Clear=as.numeric(month(Clear.Dt)),
                        Ask=as.numeric(month(Ask.Dt)),
                        Oral=as.numeric(month(Oral.Dt)), Count=1) %>%
@@ -155,7 +155,7 @@ ggplot(na.omit(ggdat), aes(x=Month, y=Count, color=Stage, fill=Stage, group=Stag
 kable(xtabs(Count ~ Stage + Month, data=ggdat))
 ```
 
-Peak plan/ask occur around Nov-Dec and Mar each year. Not nearly as much oral pledge data; usually oral to booked is fast enough that the date isn't captured in the system. (The current model rolls ask and oral together.)
+Peak ask occurs around Nov-Dec and Mar each year. Not nearly as much oral pledge data; usually oral to booked is fast enough that the date isn't captured in the system. (The current model rolls ask and oral together.)
 
 Finally, let's take a look at the booked versus declined solicitations by stage by fiscal year closed.
 
@@ -178,12 +178,12 @@ ggplot(ggdat, aes(x=Month, y=Prop, color=Booked, fill=Booked, group=Booked)) + g
 
 Confidence bands are based on the variance for a binomial random variable, $\sqrt{\frac{p(1-p)}{n}}$ (assuming independence).
 
-This is fascinating; a solicitation entering plan or clear in December through February is more likely to be refused rather than booked. Is there a specific year driving that?
+This is fascinating; a solicitation entering plan or clear in December or plan in April-May is more likely to be refused rather than booked. Is there a specific year driving that?
 
 ```{r, echo=F, warning=F, cache=T}
 ## Redo previous plots for each fiscal year
-tmp <- mdat %>% select(Planned.Dt, Clear.Dt, Ask.Dt, Oral.Dt, Booked) %>%
-  mutate(Count=1, PlanY=as.numeric(year(Planned.Dt)), Plan=as.numeric(month(Planned.Dt)),
+tmp <- mdat %>% select(Planning.Dt, Clear.Dt, Ask.Dt, Oral.Dt, Booked) %>%
+  mutate(Count=1, PlanY=as.numeric(year(Planning.Dt)), Plan=as.numeric(month(Planning.Dt)),
          ClearY=as.numeric(year(Clear.Dt)), Clear=as.numeric(month(Clear.Dt)),
          AskY=as.numeric(year(Ask.Dt)), Ask=as.numeric(month(Ask.Dt)),
          OralY=as.numeric(year(Oral.Dt)), Oral=as.numeric(month(Oral.Dt))) %>%
@@ -293,20 +293,38 @@ ggplot(ggdat, aes(x=Stage, y=Proportion, color=Booked.In.FY, fill=Booked.In.FY))
 kable(ggdat[,c("Stage","Booked.In.FY","Count","Proportion")], digits=2)
 ```
 
-Curious; there really doesn't seem to be a discernible difference between clear and ask.
-
-The last thing to check is these hybrid "reached stage and closed" indicators by month.
+Curious; there really doesn't seem to be a discernible difference between clear and ask. The last thing to check is these hybrid "reached stage and closed" indicators by month.
 
 ```{r, echo=F, warning=F, cache=T}
 # Data manupulation
-ggdat <- na.omit(mdat %>% mutate(Plan=as.numeric(month(Planned.Dt)), Clear=as.numeric(month(Clear.Dt)), Ask=as.numeric(month(Ask.Dt)), Oral=as.numeric(month(Oral.Dt)), Count=1) %>% select(Count, Plan, Clear, Ask, Oral, FY.Plan.Book, FY.Clear.Book, FY.Ask.Book, FY.Oral.Book) %>% gather("Stage", "Month", 2:5) %>% gather("Outcome", "Booked.In.FY", 2:5) %>% 
+ggdat <- na.omit(mdat %>% mutate(Plan=as.numeric(month(Planning.Dt)), Clear=as.numeric(month(Clear.Dt)), Ask=as.numeric(month(Ask.Dt)), Oral=as.numeric(month(Oral.Dt)), Count=1) %>% select(Count, Plan, Clear, Ask, Oral, FY.Plan.Book, FY.Clear.Book, FY.Ask.Book, FY.Oral.Book) %>% gather("Stage", "Month", 2:5) %>% gather("Outcome", "Booked.In.FY", 2:5) %>% 
   # Need to get rid of mismatched rows, e.g. where Stage=Ask and Outcome=FY.Clear.Book
-  filter((Stage=="Plan" & Outcome=="FY.Plan.Book") | (Stage=="Clear" & Outcome=="FY.Clear.Book") | (Stage=="Ask" & Outcome=="FY.Ask.Book") | (Stage=="Oral" & Outcome=="FY.Oral.Book")) %>% mutate(Month=as.factor(Month)) %>% group_by(Stage, Month, Booked.In.FY) %>% summarise(Count=sum(Count)))
-
-tmp <- mdat %>% mutate(Plan=as.numeric(month(Planned.Dt)), Clear=as.numeric(month(Clear.Dt)), Ask=as.numeric(month(Ask.Dt)), Oral=as.numeric(month(Oral.Dt)), Count=1) %>% select(Count, Plan, Clear, Ask, Oral, FY.Plan.Book, FY.Clear.Book, FY.Ask.Book, FY.Oral.Book) #%>% gather("Stage", "Month", 2:5) %>% gather("Outcome", "Booked.In.FY", 2:5) %>% filter((Stage=="Plan" & Outcome=="FY.Plan.Book") | (Stage=="Clear" & Outcome=="FY.Clear.Book") | (Stage=="Ask" & Outcome=="FY.Ask.Book") | (Stage=="Oral" & Outcome=="FY.Oral.Book"))
-  
-
-write.table(tmp, "tmp2.txt", sep="\t", row.names=F)
-
-write.table(mdat, "tmp.txt", sep="\t", row.names=F)
+  filter((Stage=="Plan" & Outcome=="FY.Plan.Book") | (Stage=="Clear" & Outcome=="FY.Clear.Book") | (Stage=="Ask" & Outcome=="FY.Ask.Book") | (Stage=="Oral" & Outcome=="FY.Oral.Book")) %>% mutate(Month=factor(Month, labels=strtrim(month.name, 3))) %>% group_by(Stage, Month, Booked.In.FY) %>% summarise(Count=sum(Count)))
+# Reorder months to be in fiscal order
+ggdat$Month <- factor(ggdat$Month, levels(ggdat$Month)[c(7:12,1:6)])
+# Add proportions and CIs
+ggdat <- ggdat %>% mutate(n=sum(Count), Prop=Count/n, ci=sqrt(Prop*(1-Prop)/n))
+# Plot counts by month
+ggplot(ggdat, aes(x=Month, y=Count, color=Booked.In.FY, group=Booked.In.FY)) + geom_point() + geom_line(alpha=.5) + facet_grid(Stage~.) + theme(text=element_text(size=12))
+# Plot prop by month
+ggplot(ggdat, aes(x=Month, y=Prop, color=Booked.In.FY, fill=Booked.In.FY, group=Booked.In.FY)) + geom_point() + geom_line(alpha=.5) + geom_ribbon(aes(ymin=Prop-ci, ymax=Prop+ci), alpha=.15) + labs(y="Percent") + theme(text=element_text(size=12)) + facet_grid(Stage~.) + scale_y_continuous(labels=percent)
 ```
+
+There are a couple of crossover points; January for Plan and Clear; Jan or Feb for ask (though it crosses back in March interestingly). Can't count on oral pledges made in May or June coming in before the end of the year. Let's restrict the plot to just asks in the MG range, $x\in[100k,5M)$:
+
+```{r, echo=F, warning=F, cache=T}
+# Data manupulation
+ggdat <- na.omit(mdat %>% mutate(GiftSize=ifelse(Ask.Amt>=5000000,"PG",ifelse(Ask.Amt>=100000,"MG",ifelse(Ask.Amt<100000,"AF","Unasked")))) %>% mutate(Plan=as.numeric(month(Planning.Dt)), Clear=as.numeric(month(Clear.Dt)), Ask=as.numeric(month(Ask.Dt)), Oral=as.numeric(month(Oral.Dt)), Count=1) %>% select(Count, Plan, Clear, Ask, Oral, FY.Plan.Book, FY.Clear.Book, FY.Ask.Book, FY.Oral.Book, GiftSize) %>% gather("Stage", "Month", 2:5) %>% gather("Outcome", "Booked.In.FY", 2:5) %>% 
+  # Need to get rid of mismatched rows, e.g. where Stage=Ask and Outcome=FY.Clear.Book
+  filter((Stage=="Plan" & Outcome=="FY.Plan.Book") | (Stage=="Clear" & Outcome=="FY.Clear.Book") | (Stage=="Ask" & Outcome=="FY.Ask.Book") | (Stage=="Oral" & Outcome=="FY.Oral.Book")) %>% mutate(Month=factor(Month, labels=strtrim(month.name, 3))) %>% group_by(GiftSize, Stage, Month, Booked.In.FY) %>% summarise(Count=sum(Count)))
+# Reorder months to be in fiscal order
+ggdat$Month <- factor(ggdat$Month, levels(ggdat$Month)[c(7:12,1:6)])
+# Add proportions and CIs
+ggdat <- ggdat %>% mutate(n=sum(Count), Prop=Count/n, ci=sqrt(Prop*(1-Prop)/n))
+# Plot counts by month
+ggplot(ggdat, aes(x=Month, y=Count, color=Booked.In.FY, group=Booked.In.FY)) + geom_point() + geom_line(alpha=.5) + facet_grid(Stage~GiftSize) + theme(text=element_text(size=12), axis.text.x=element_text(angle=90, vjust=.4))
+# Plot prop by month
+ggplot(ggdat, aes(x=Month, y=Prop, color=Booked.In.FY, fill=Booked.In.FY, group=Booked.In.FY)) + geom_point() + geom_line(alpha=.5) + geom_ribbon(aes(ymin=Prop-ci, ymax=Prop+ci), alpha=.15) + labs(y="Percent") + theme(text=element_text(size=12), axis.text.x=element_text(angle=90, vjust=.4)) + facet_grid(Stage~GiftSize) + scale_y_continuous(labels=percent)
+```
+
+Ha, that's more like it. Plan has a negative trend after Feb; Clear is surprisingly close to flat; Ask has a negative trend after March; Oral can't be counted on in May and June.
