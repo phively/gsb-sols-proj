@@ -9,9 +9,9 @@ output: html_document
 
 My goal is to find a way to accurately forecast fundraising revenue.
 
-The existing model has two components. First, the probability a solicitation $S_{i}$ comes in before the end of the fiscal year is a function of the current stage progress $c$ and time until the end of the year $t$, $P(S_{i}=1)=f(c_{i},t)$. The expected FRP in the current fiscal year is this probability times the expected amount, $E(FRP)=P(S_{i}=1)E(S_{i})$.
+The existing model ("JMod") has two components. First, the probability a solicitation $S_{i}$ comes in before the end of the fiscal year is a function of the current stage progress $c$ and time until the end of the year $t$, $P(S_{i}=1)=f(c_{i},t)$. The expected FRP in the current fiscal year is this probability times the expected amount, $E(FRP)=P(S_{i}=1)E(S_{i})$.
 
-For the probability model, I assume that there should also be some effect due to the average close rate, season (e.g. people give more in December), planned ask amount, actual ask amount, and potentially interactions. Something like this:
+Focus on the probability model. I assume that there should also be some effect due to the average close rate, season (e.g. people give more in December), planned ask amount, actual ask amount, and potentially interactions. Something like this:
 
 $$P(S_{ij}=1)=f(c_{i},t,\mu,t_{i}^{*},a_{j}^{*},a_{j})$$
 
@@ -19,7 +19,7 @@ It makes sense to start with a few straightforward classifiers, but I'd also lik
 
 # Visualizations
 
-The dataset includes all closed (successful or unsuccessful) solicitations with an add date on or after 7/1/2011. Data is obtained from the first tab of the "Booth solicitation history" report (saved as a .csv).
+The dataset includes all closed (successful = booked, or unsuccessful = not booked) solicitations with an add date on or after 7/1/2011. Data is obtained from the first tab of the "Booth solicitation history" report (saved as a .csv).
 
 ```{r, message=F, cache=F}
 #### Run Rscript0 to load useful packages ----
@@ -51,63 +51,32 @@ ggdat <- Joe.dat2 %>%  mutate(
   filter(as.numeric(substr(Final.Sol.Stage,1,2)) >= 10)
 
 ## Create plots
-ggplot(ggdat, aes(x=plan2clear, fill=giftsize)) + geom_density(alpha=.5) +
-  facet_grid(giftsize~.) + labs(title="Days from planning to clearance") + xlim(c(0,1000))
-ggplot(ggdat, aes(x=clear2ask, fill=giftsize)) + geom_density(alpha=.5) +
-  facet_grid(giftsize~.) + labs(title="Days from clearance to ask")
-ggplot(ggdat, aes(x=ask2actual, fill=giftsize)) + geom_density(alpha=.5) +
-  facet_grid(giftsize~.) + labs(title="Days from ask to actual")
-ggplot(ggdat, aes(x=plan2actual, fill=giftsize)) + geom_density(alpha=.5) +
-  facet_grid(giftsize~.) + labs(title="Days from planning to actual")
+bins <- 40
+ggplot(ggdat, aes(x=plan2clear, fill=giftsize)) + geom_histogram(aes(y=..density..), alpha=.5, bins=bins) + geom_density(alpha=.5) + facet_grid(giftsize~.) + labs(title="Days from planning to clearance") + xlim(c(0,1000))
+ggplot(ggdat, aes(x=clear2ask, fill=giftsize)) + geom_histogram(aes(y=..density..), alpha=.5, bins=bins) + geom_density(alpha=.5) + facet_grid(giftsize~.) + labs(title="Days from clearance to ask")
+ggplot(ggdat, aes(x=ask2actual, fill=giftsize)) + geom_histogram(aes(y=..density..), alpha=.5, bins=bins) + geom_density(alpha=.5) + facet_grid(giftsize~.) + labs(title="Days from ask to actual")
+ggplot(ggdat, aes(x=plan2actual, fill=giftsize)) + geom_histogram(aes(y=..density..), alpha=.5, bins=bins) + geom_density(alpha=.5) + facet_grid(giftsize~.) + labs(title="Days from planning to actual")
 ```
 
-There's extremely obvious bimodality in most cases. Note in particular that while PG is skewed positive overall, there seem to be two groups: takes a while and takes a *long* while. The purple "Days from ask to actual" is about as perfect a mixture of two $N(\mu_{k},\sigma^{2}_{k})$ as I've ever seen. Might be interesting to see if a certain population just takes longer.
+There's extremely obvious bimodality in most cases. Note in particular that while PG (defined as $5M+) is skewed positive overall, there seem to be two distinct groups: takes a while and takes a *long* while. The purple "Days from ask to actual" is about as perfect a mixture of two $N(\mu_{k},\sigma^{2}_{k})$ as I've ever seen. Might be interesting to see if a certain population just takes longer in general.
 
 ```{r, echo=F, warning=F, cache=T}
 ## Ask and oral dates
-ggplot(ggdat[ggdat$giftsize!="$5M+",], aes(x=ask2oral, fill=giftsize)) + geom_density(alpha=.5) + facet_grid(giftsize~.) + labs(title="Days from ask to oral")
-ggplot(ggdat[ggdat$giftsize!="$5M+",], aes(x=oral2actual, fill=giftsize)) + geom_density(alpha=.5) + facet_grid(giftsize~.) + labs(title="Days from oral to actual")
+bins <- 40
+ggplot(ggdat[ggdat$giftsize!="$5M+",], aes(x=ask2oral, fill=giftsize)) + geom_histogram(aes(y=..density..), alpha=.5, bins=bins) + geom_density(alpha=.5) + facet_grid(giftsize~.) + labs(title="Days from ask to oral")
+ggplot(ggdat[ggdat$giftsize!="$5M+",], aes(x=oral2actual, fill=giftsize)) + geom_histogram(aes(y=..density..), alpha=.5, bins=bins) + geom_density(alpha=.5) + facet_grid(giftsize~.) + labs(title="Days from oral to actual")
 ```
 
 There isn't much data in the oral pledge stage so things are a bit bumpier here.
 
 Here's the cleaned up data file:
-```{r, echo=F, warning=F, cache=T}
+```{r, echo=T, warning=F, cache=T}
 #### Model data cleanup ----
-
-# Function to return end of the fiscal year
-fye <- function(date){ymd(as.character(paste(round(month(date)/13)+year(date),"06","30", sep="-")))}
-
-# Include only closed solicitations with Expected under $5M
-mdat <- Joe.dat2 %>% filter(as.numeric(substr(Final.Sol.Stage,1,2)) >= 10 & Expected.Amt<5000000) %>%
-  # Drop any solicitations where the actual date is before the start date
-  mutate(plan2actual = as.numeric(difftime(Actual.Dt, Planning.Dt, units="days")),
-         clear2actual = as.numeric(difftime(Actual.Dt, Clear.Dt, units="days")),
-         ask2actual = as.numeric(difftime(Actual.Dt, Ask.Dt, units="days")),
-         oral2actual = as.numeric(difftime(Actual.Dt, Oral.Dt, units="days"))) %>%
-  filter(plan2actual>0) %>%
-  # Determine the EOFY at the start of each stage
-  mutate(planFYE = fye(Planning.Dt),
-         clearFYE = fye(Clear.Dt),
-         askFYE = fye(Ask.Dt),
-         oralFYE = fye(Oral.Dt),
-         # Did the solicitation close in the same FY as the stage
-         FY.plan = Actual.Dt <= planFYE,
-         FY.clear = Actual.Dt <= clearFYE,
-         FY.ask = Actual.Dt <= askFYE,
-         FY.oral = Actual.Dt <= oralFYE,
-         planFYE = NULL, clearFYE = NULL, askFYE = NULL, oralFYE = NULL) %>%
-  # Add indicators for solicitations that booked in the same year they hit the stage
-  mutate(FY.Plan.Book = FY.plan & Booked,
-         FY.Clear.Book = FY.clear & Booked,
-         FY.Ask.Book = FY.ask & Booked,
-         FY.Oral.Book = FY.oral & Booked)
-```
-```{r, cache=T}
+source("Rscript1a - modeling data appends.R")
 colnames(mdat)
 ```
 
-**Booked** indicates whether the solicitation came in at $>$$0, and **FY.plan, FY.clear, FY.ask, FY.oral** indicate whether the solicitation closed in the same fiscal year as that stage was reached. Combinations of these five indicators will be the dependent variables. **plan2actual, clear2actual, ask2actual, oral2actual** are measured in days. The other covariates should be self-explanatory.
+**Booked** indicates whether the solicitation came in at $>$$0, and **FY.plan, FY.clear, FY.ask, FY.oral** indicate whether the solicitation closed in the same fiscal year as that stage was reached, while the corresponding **FY.[Stage].Book** indicates that a solicitation was booked in the same fiscal year that it reached that stage. Combinations of these indicators will be the dependent variables. **plan2actual, clear2actual, ask2actual, oral2actual** are measured in days. **Planned.Dt** is the planned *ask* date, while **Planning.Dt** is the date the solicitation entered the planning stage. The other covariates should be self-explanatory.
 
 # Variable exploration
 
@@ -155,7 +124,7 @@ ggplot(na.omit(ggdat), aes(x=Month, y=Count, color=Stage, fill=Stage, group=Stag
 kable(xtabs(Count ~ Stage + Month, data=ggdat))
 ```
 
-Peak ask occurs around Nov-Dec and Mar each year. Not nearly as much oral pledge data; usually oral to booked is fast enough that the date isn't captured in the system. (The current model rolls ask and oral together.)
+Peak ask occurs around Nov-Dec and Mar each year. Not nearly as much oral pledge data; usually oral to booked is fast enough that the date isn't captured in the system. (JMod rolls ask and oral together.)
 
 Finally, let's take a look at the booked versus declined solicitations by stage by fiscal year closed.
 
@@ -181,24 +150,25 @@ Confidence bands are based on the variance for a binomial random variable, $\sqr
 This is fascinating; a solicitation entering plan or clear in December or plan in April-May is more likely to be refused rather than booked. Is there a specific year driving that?
 
 ```{r, echo=F, warning=F, cache=T}
+## Function to convert calendar to fiscal year
+YtoFY <- function(x){return(as.numeric(ifelse(month(x)>=7,1,0) + year(x)))}
 ## Redo previous plots for each fiscal year
 tmp <- mdat %>% select(Planning.Dt, Clear.Dt, Ask.Dt, Oral.Dt, Booked) %>%
-  mutate(Count=1, PlanY=as.numeric(year(Planning.Dt)), Plan=as.numeric(month(Planning.Dt)),
-         ClearY=as.numeric(year(Clear.Dt)), Clear=as.numeric(month(Clear.Dt)),
-         AskY=as.numeric(year(Ask.Dt)), Ask=as.numeric(month(Ask.Dt)),
-         OralY=as.numeric(year(Oral.Dt)), Oral=as.numeric(month(Oral.Dt))) %>%
+  mutate(Count=1, PlanY=YtoFY(Planning.Dt), Plan=as.numeric(month(Planning.Dt)),
+         ClearY=YtoFY(Clear.Dt), Clear=as.numeric(month(Clear.Dt)),
+         AskY=YtoFY(Ask.Dt), Ask=as.numeric(month(Ask.Dt)),
+         OralY=YtoFY(Oral.Dt), Oral=as.numeric(month(Oral.Dt))) %>%
   select(-c(1:4)) #Drop actual dates which are now unneeded
 # Spread month and year
 tmp2 <- gather(tmp, "Stage", "Month", seq(4,10,by=2)) %>% gather("StageY", "Year", 3:6) %>%
   mutate(Month=as.factor(Month), Year=as.factor(Year), StageY=NULL)
 levels(tmp2$Month) <- strtrim(month.name, 3) #use month names
-tmp2$Month <- factor(tmp2$Month, levels(tmp2$Month)[c(7:12,1:6)]) #start in Jul instead of Jan
 ## Redo previous # plot for each fiscal year
 ggdat <- na.omit(tmp2) %>% group_by(Stage, Month, Year) %>% summarise(Count=sum(Count))
-ggplot(ggdat[ggdat$Year!="2010",], aes(x=Month, y=Count, color=Stage, fill=Stage, group=Stage)) + geom_point() + geom_line() + labs(y="Count of solicitations entering stage by year") + facet_grid(Year~.) + theme(text=element_text(size=12))
+ggplot(ggdat, aes(x=Month, y=Count, color=Stage, fill=Stage, group=Stage)) + geom_point() + geom_line() + labs(y="Count of solicitations entering stage by year") + facet_grid(Year~.) + theme(text=element_text(size=12))
 ```
 
-2010, 2016, 2017 don't have enough data so they're dropped. 2011 didn't have much stage progress in the second half of the year.
+Note that this is fiscal, not calendar, year. FY2011 didn't have much stage progress, but it is the first year of data.
 
 ```{r, echo=F, warning=F, cache=T}
 ## Data for plotting %s
@@ -214,11 +184,11 @@ for(i in 1:dim(ggdat)[1]){
 ggplot(ggdat[!(ggdat$Year %in% c("2010","2016","2017")),], aes(x=Month, y=Prop, color=Booked, fill=Booked, group=Booked)) + geom_point() + geom_line(alpha=.4) + geom_ribbon(aes(ymin=Prop-ci, ymax=Prop+ci), alpha=.15) + labs(y="Proportion of solicitations entering stage") + facet_grid(Stage~Year) + scale_y_continuous(labels=percent) + theme(axis.text.x=element_text(angle=90, vjust=.4))
 ```
 
-Looks like 2012 was a good year; other than that it's normal to have lots of duds in those winter months
+Looks like 2012 was a particularly good year, but it's normal to have lots of duds in those winter months
 
 ## Discrete covariates
 
-I'm thinking time to close is not the natural outcome measure; a model predicting time to close can't be swapped out directly with the existing one. Recall from above:
+I'm thinking time to close is not the natural outcome measure; a model predicting time to close can't be swapped out directly with the corresponding terms in JMod. Recall from above:
 
 > For the probability model, I assume that there should also be some effect due to the average close rate, season (e.g. people give more in December), planned ask amount, actual ask amount, and potentially interactions. Something like this:
 >
@@ -229,14 +199,15 @@ Take a look at each of these additional variables against Booked.
 ### Ask Amount
 
 ```{r, echo=F, warning=F, cache=T}
-g1 <- ggplot(mdat, aes(x=Ask.Amt, y=..count.., color=Booked, fill=Booked)) + geom_density(alpha=.5) + labs(x="Ask amount", y="Count", title=expression(paste("Close counts by ",Log[10]," ask amount"))) + scale_x_continuous(trans="log10", breaks=10^seq(1:7), labels=scales::dollar) #+ facet_grid(Booked~.)
+bins <- 5
+g1 <- ggplot(mdat, aes(x=Ask.Amt, y=..count.., color=Booked, fill=Booked)) + geom_histogram(alpha=.2, bins=bins, position="identity") + geom_density(alpha=.5) + labs(x="Ask amount", y="Count", title=expression(paste("Close counts by ",Log[10]," ask amount"))) + scale_x_continuous(trans="log10", breaks=10^seq(1:7), labels=scales::dollar) #+ facet_grid(Booked~.)
 # Look at relative frequencies
 g2 <- ggplot(mdat, aes(x=Ask.Amt, y=..count.., color=Booked, fill=Booked)) + geom_hline(yintercept=.5, alpha=.5) + geom_density(alpha=.5, position="fill") + labs(x="Ask amount", y="Probability", title=expression(paste("Close rates by ",Log[10]," ask amount"))) + scale_x_continuous(trans="log10", breaks=10^seq(1:7), labels=scales::dollar)
 # Final layout
 grid.arrange(g1, g2)
 ```
 
-Above 50% close rate at every level, but the poorest close rate is between the $100k to $1M levels. There's obviously nonlinearity; a cubic polynomial might be a good approximation?
+Histogram and smoothed density estimate. It's above 50% close rate at every level, but the poorest close rate is between the $100k to $1M levels. There's obviously nonlinearity; a cubic polynomial might be a good approximation?
 
 ### Ask Amount/Planned Amount
 
@@ -245,7 +216,7 @@ I think differences in planned ask versus actual ask amounts might indicate trou
 ```{r, echo=F, warning=F, cache=T}
 g1 <- ggplot(mdat, aes(x=(Ask.Amt/Planned.Amt), y=..count.., color=Booked, fill=Booked)) + geom_density(alpha=.5) + labs(x="Ask amount", y="Count", title="Close counts by Ask/Planned") + scale_x_continuous(trans="log10", labels=scales::percent)
 # Look at relative frequencies
-g2 <- ggplot(mdat, aes(x=(Ask.Amt/Planned.Amt), y=..count.., color=Booked, fill=Booked)) + geom_hline(yintercept=.5, alpha=.5) + geom_density(alpha=.5, position="fill") + labs(x="Ask amount", y="Probability", title="Close rates by Ask/Planned") + scale_x_continuous(trans="log10", labels=scales::percent)
+g2 <- ggplot(mdat, aes(x=(Ask.Amt/Planned.Amt), y=..count.., color=Booked, fill=Booked)) + geom_hline(yintercept=.5, alpha=.5) + geom_density(alpha=.5, position="fill") + labs(x="Ask amount", y="Proportion", title="Close rates by Ask/Planned") + scale_x_continuous(trans="log10", labels=scales::percent)
 # Final layout
 grid.arrange(g1, g2)
 ```
@@ -258,7 +229,7 @@ bins <- c(0,.25,.5,.75,.99,1.01,1.5,2,2.5,3)
 ## If I keep copy-pasting this it should really go in its own .R script
 g1 <- ggplot(mdat, aes(x=Ask.Amt/Planned.Amt, color=Booked, fill=Booked)) + geom_histogram(alpha=.5, breaks=bins, position="identity") + labs(x="Ask amount", y="Count", title="Close counts by Ask/Planned") + scale_x_continuous(labels=scales::percent, breaks=c(seq(0,1,by=.25), seq(1.5,max(bins),by=.5)))
 # Look at relative frequencies
-g2 <- ggplot(mdat, aes(x=Ask.Amt/Planned.Amt, color=Booked, fill=Booked)) + geom_hline(yintercept=.5, alpha=.5) + geom_histogram(alpha=.5, position="fill", breaks=bins) + labs(x="Ask amount", y="Probability", title="Close rates by Ask/Planned") + scale_x_continuous(labels=scales::percent, breaks=c(seq(0,1,by=.25), seq(1.5,max(bins),by=.5)))
+g2 <- ggplot(mdat, aes(x=Ask.Amt/Planned.Amt, color=Booked, fill=Booked)) + geom_hline(yintercept=.5, alpha=.5) + geom_histogram(alpha=.5, position="fill", breaks=bins) + labs(x="Ask amount", y="Proportion", title="Close rates by Ask/Planned") + scale_x_continuous(labels=scales::percent, breaks=c(seq(0,1,by=.25), seq(1.5,max(bins),by=.5)))
 # Final layout
 grid.arrange(g1, g2)
 ```
@@ -276,7 +247,7 @@ levels(ggdat$Stage) <- c("Plan","Clear","Ask","Oral")
 ggplot(ggdat, aes(x=Stage, y=Count, fill=Closed)) + geom_bar(stat="identity", position="dodge", alpha=.5)
 # Plot of probabilities
 ggdat <- ggdat %>% mutate(n=sum(Count), Proportion=Count/n, ci=sqrt(Proportion*(1-Proportion)/n))
-ggplot(ggdat, aes(x=Stage, y=Proportion, color=Closed, fill=Closed)) + geom_point(stat="identity", alpha=.5, size=2) + geom_linerange(aes(ymin=Proportion-ci, ymax=Proportion+ci), alpha=.25, size=3) + labs(y="Probability") + scale_y_continuous(limits=c(0,1), breaks=seq(0,1,by=.2))
+ggplot(ggdat, aes(x=Stage, y=Proportion, color=Closed, fill=Closed)) + geom_point(stat="identity", alpha=.5, size=2) + geom_linerange(aes(ymin=Proportion-ci, ymax=Proportion+ci), alpha=.25, size=3) + labs(y="Proportion") + scale_y_continuous(limits=c(0,1), breaks=seq(0,1,by=.2))
 kable(ggdat[,c("Stage","Closed","Count","Proportion")], digits=2)
 ```
 
@@ -289,7 +260,7 @@ levels(ggdat$Stage) <- c("Plan","Clear","Ask","Oral")
 ggplot(ggdat, aes(x=Stage, y=Count, fill=Booked.In.FY)) + geom_bar(stat="identity", position="dodge", alpha=.5)
 # Plot of probabilities
 ggdat <- ggdat %>% mutate(n=sum(Count), Proportion=Count/n, ci=sqrt(Proportion*(1-Proportion)/n))
-ggplot(ggdat, aes(x=Stage, y=Proportion, color=Booked.In.FY, fill=Booked.In.FY)) + geom_point(stat="identity", alpha=.5, size=2) + geom_linerange(aes(ymin=Proportion-ci, ymax=Proportion+ci), alpha=.25, size=3) + labs(y="Probability") + scale_y_continuous(limits=c(0,1), breaks=seq(0,1,by=.2))
+ggplot(ggdat, aes(x=Stage, y=Proportion, color=Booked.In.FY, fill=Booked.In.FY)) + geom_point(stat="identity", alpha=.5, size=2) + geom_linerange(aes(ymin=Proportion-ci, ymax=Proportion+ci), alpha=.25, size=3) + labs(y="Proportion") + scale_y_continuous(limits=c(0,1), breaks=seq(0,1,by=.2))
 kable(ggdat[,c("Stage","Booked.In.FY","Count","Proportion")], digits=2)
 ```
 
@@ -310,7 +281,7 @@ ggplot(ggdat, aes(x=Month, y=Count, color=Booked.In.FY, group=Booked.In.FY)) + g
 ggplot(ggdat, aes(x=Month, y=Prop, color=Booked.In.FY, fill=Booked.In.FY, group=Booked.In.FY)) + geom_point() + geom_line(alpha=.5) + geom_ribbon(aes(ymin=Prop-ci, ymax=Prop+ci), alpha=.15) + labs(y="Percent") + theme(text=element_text(size=12)) + facet_grid(Stage~.) + scale_y_continuous(labels=percent)
 ```
 
-There are a couple of crossover points; January for Plan and Clear; Jan or Feb for ask (though it crosses back in March interestingly). Can't count on oral pledges made in May or June coming in before the end of the year. Let's restrict the plot to just asks in the MG range, $x\in[100k,5M)$:
+There are a couple of crossover points; January for Plan and Clear; Jan or Feb for ask (though it crosses back in March interestingly). Can't count on oral pledges made in May or June coming in before the end of the year. Let's focus on asks in the MG range, $x\in[\$100\textrm{k},\$5\textrm{M})$:
 
 ```{r, echo=F, warning=F, cache=T}
 # Data manupulation
@@ -328,3 +299,8 @@ ggplot(ggdat, aes(x=Month, y=Prop, color=Booked.In.FY, fill=Booked.In.FY, group=
 ```
 
 Ha, that's more like it. Plan has a negative trend after Feb; Clear is surprisingly close to flat; Ask has a negative trend after March; Oral can't be counted on in May and June.
+
+# Packages used
+```{r}
+session_info()
+```

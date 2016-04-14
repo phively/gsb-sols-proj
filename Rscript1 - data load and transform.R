@@ -1,7 +1,3 @@
-#### Useful packages for data manipulation ----
-library(dplyr) # Joins and data wrangling
-library(lubridate) # Date formats
-
 #### Useful functions for wrangling ----
 renamer <- function(data, old, new){ #args(dataset, old column name(s), new column name)
   for (i in 1:max(length(old),1)){

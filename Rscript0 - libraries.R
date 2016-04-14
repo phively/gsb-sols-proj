@@ -10,3 +10,5 @@ library(ggplot2)
 library(scales)
 library(knitr)
 library(gridExtra)
+# Misc
+library(devtools)

@@ -1,0 +1,15 @@
+---
+title: "2 Training and Model Selection"
+author: "Paul Hively"
+date: "April 13, 2016"
+output: html_document
+---
+
+Begin by loading the data used for the visualizations in part 1.
+
+```{r, message=F, cache=F}
+#### Run Rscript0 to load useful packages ----
+source("Rscript0 - libraries.R")
+#### Model data cleanup ----
+source("Rscript1a - modeling data appends.R")
+```
