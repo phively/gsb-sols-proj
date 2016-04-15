@@ -1,15 +1,78 @@
 ---
 title: "2 Training and Model Selection"
 author: "Paul Hively"
-date: "April 13, 2016"
+date: "April 14, 2016"
 output: html_document
 ---
 
+# Logistic modeling
+
+## First attempt
+
 Begin by loading the data used for the visualizations in part 1.
 
-```{r, message=F, cache=F}
+```{r, message=F, warning=F, cache=F}
 #### Run Rscript0 to load useful packages ----
 source("Rscript0 - libraries.R")
+```
+```{r, message=F, warning=F, cache=T}
 #### Model data cleanup ----
 source("Rscript1a - modeling data appends.R")
+```
+
+Recall:
+
+> The existing model ("JMod") has two components. First, the probability a solicitation $S_{i}$ comes in before the end of the fiscal year is a function of the current stage progress $c$ and time until the end of the year $t$, $P(S_{i}=1)=f(c_{i},t)$. The expected FRP in the current fiscal year is this probability times the expected amount, $E(FRP)=P(S_{i}=1)E(S_{i})$.
+>
+> Focus on the probability model. I assume that there should also be some effect due to the average close rate, season (e.g. people give more in December), planned ask amount, actual ask amount, and potentially interactions. Something like this:
+>
+> $$P(S_{ij}=1)=f(c_{i},t,\mu,t_{i}^{*},a_{j}^{*},a_{j})$$
+
+Start by trying to directly predict the booked in FY probabilities. The simplest approach is to treat everything that isn't continuous as a factor and chuck it into a logistic regression model.
+
+$$logit(p)=log\Big(\frac{p}{1-p}\Big)=\eta$$
+$$\eta_{i}=c_{i}+t_{i}^{*}$$
+
+In other words, the logit of the expected close rate is dependent on some intercept $c_{i}$ due to stage, and some month effect $t_{i}^{*}$.
+
+```{r, message=F, warning=F, cache=T}
+## Model each stage by when it was asked 
+glm.pln.1 <- glm(FY.Plan.Book ~ as.factor(month(mdat$Planning.Dt)), data=mdat, family=binomial())
+glm.clr.1 <- glm(FY.Clear.Book ~ as.factor(month(mdat$Planning.Dt)), data=mdat, family=binomial())
+glm.ask.1 <- glm(FY.Ask.Book ~ as.factor(month(mdat$Planning.Dt)), data=mdat, family=binomial())
+glm.ora.1 <- glm(FY.Oral.Book ~ as.factor(month(mdat$Planning.Dt)), data=mdat, family=binomial())
+## Function to examine the deviances to assess goodness of fit
+dev.comp <- function(models, str, debug=F){
+  # Loop through the models passed to the function
+  out <- NULL
+  for(i in 1:length(models)){
+    m <- summary(models[[i]])
+    m$difference = m$null.deviance - m$deviance
+    m$rel.difference = m$difference / m$null.deviance
+    out <- rbind(out, round(data.frame(m$null.deviance, m$deviance, m$difference, m$rel.difference), 2))
+    if(debug){print(out)}
+  }
+  rownames(out) <- str
+  return(out)
+}
+## Function to generate confusion matrix
+confusion <- function(models, thresh, str, debug=F){
+  out <- list()
+  for(i in 1:length(models)){
+    m <- models[[i]]
+    ## STUFF ##
+  }
+  return(out)
+}
+# Compare each of the models
+dev.comp(models=list(glm.pln.1, glm.clr.1, glm.ask.1, glm.ora.1), str=c("Plan","Clear","Ask","Oral"), debug=F)
+```
+
+
+
+Potentially interesting derived variables include $t$, the number of days left in the year, and $\Delta t$, the amount of time that's passed since the previous stage.
+
+# Packages used
+```{r}
+session_info()
 ```
