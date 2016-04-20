@@ -15,7 +15,7 @@ Begin by loading the data used for the visualizations in part 1.
 #### Run Rscript0 to load useful packages ----
 source("Rscript0 - libraries.R")
 ```
-```{r, message=F, warning=F, cache=T}
+```{r, message=F, warning=F, cache=F}
 #### Model data cleanup ----
 source("Rscript1a - modeling data appends.R")
 ```
@@ -35,40 +35,68 @@ $$\eta_{i}=c_{i}+t_{i}^{*}$$
 
 In other words, the logit of the expected close rate is dependent on some intercept $c_{i}$ due to stage, and some month effect $t_{i}^{*}$.
 
-```{r, message=F, warning=F, cache=T}
+```{r, echo=F, message=F, warning=F, cache=F}
+## Function to examine the deviances to assess goodness of fit
+dev.comp <- function(models, modnames, debug=F){
+  # Loop through the models passed to the function
+  out <- NULL
+  # Check if not actually passed a list of models
+  is.list <- class(models)[1]=="list"
+    if(debug){print(is.list)}
+  if(is.list) {n=length(models)} else {n=1}
+    if(debug){print(paste("n =",n))}
+  # Loop through models
+  for(i in 1:n){
+    # Extract the current model
+    if(is.list) {m <- summary(models[[i]])} else {m <- summary(models)}
+    m$difference = m$null.deviance - m$deviance
+    m$rel.difference = m$difference / m$null.deviance
+    m$df.p = m$df.null
+    m$df.q = m$df.residual
+    m$p = with(m, pchisq(difference, df=df.p-df.q, lower.tail=F))
+    out <- rbind(out, data.frame(null.dev=m$null.deviance, dev=m$deviance, diff=m$difference, rel.diff=m$rel.difference, df.p=m$df.p, df.q=m$df.q, p=m$p))
+    if(debug){print(out)}
+  }
+  rownames(out) <- modnames
+  return(out)
+}
+
+## Function to generate confusion matrix
+confusion <- function(models, threshold, modnames, debug=F){
+  out <- list()
+  # Check if not actually passed a list of models
+  is.list <- class(models)[1]=="list"
+    if(debug){print(is.list)}
+  if(is.list) {n=length(models)} else {n=1}
+    if(debug){print(paste("n =",n))}
+  # Loop through models
+  for(i in 1:n){
+    # Extract the current model
+    if(is.list) {m <- models[[i]]} else {m <- models}
+    out[[i]] <- table(truth=model.frame(m)[,1], pred=fitted(m)>=threshold)
+  }
+  names(out) <- modnames
+  return(out)
+}
+```
+```{r, message=F, warning=F, cache=F}
 ## Model each stage by when it was asked 
 glm.pln.1 <- glm(FY.Plan.Book ~ as.factor(month(mdat$Planning.Dt)), data=mdat, family=binomial())
 glm.clr.1 <- glm(FY.Clear.Book ~ as.factor(month(mdat$Planning.Dt)), data=mdat, family=binomial())
 glm.ask.1 <- glm(FY.Ask.Book ~ as.factor(month(mdat$Planning.Dt)), data=mdat, family=binomial())
 glm.ora.1 <- glm(FY.Oral.Book ~ as.factor(month(mdat$Planning.Dt)), data=mdat, family=binomial())
-## Function to examine the deviances to assess goodness of fit
-dev.comp <- function(models, str, debug=F){
-  # Loop through the models passed to the function
-  out <- NULL
-  for(i in 1:length(models)){
-    m <- summary(models[[i]])
-    m$difference = m$null.deviance - m$deviance
-    m$rel.difference = m$difference / m$null.deviance
-    out <- rbind(out, round(data.frame(m$null.deviance, m$deviance, m$difference, m$rel.difference), 2))
-    if(debug){print(out)}
-  }
-  rownames(out) <- str
-  return(out)
-}
-## Function to generate confusion matrix
-confusion <- function(models, thresh, str, debug=F){
-  out <- list()
-  for(i in 1:length(models)){
-    m <- models[[i]]
-    ## STUFF ##
-  }
-  return(out)
-}
+modnames <- c("Plan","Clear","Ask","Oral")
 # Compare each of the models
-dev.comp(models=list(glm.pln.1, glm.clr.1, glm.ask.1, glm.ora.1), str=c("Plan","Clear","Ask","Oral"), debug=F)
+kable(dev.comp(models=list(glm.pln.1, glm.clr.1, glm.ask.1, glm.ora.1), modnames=modnames, debug=F), digits=3)
 ```
 
+Stuff
 
+```{r, message=F, warning=F, cache=F}
+confusion(list(glm.pln.1, glm.clr.1, glm.ask.1, glm.ora.1), threshold=.5, modnames=modnames, debug=F)
+```
+
+Confusion matrices
 
 Potentially interesting derived variables include $t$, the number of days left in the year, and $\Delta t$, the amount of time that's passed since the previous stage.
 

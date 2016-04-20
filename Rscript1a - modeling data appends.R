@@ -27,7 +27,7 @@ mdat <- mdat %>% filter(as.numeric(substr(Final.Sol.Stage,1,2)) >= 10 & Expected
          FY.oral = Actual.Dt <= oralFYE,
          planFYE = NULL, clearFYE = NULL, askFYE = NULL, oralFYE = NULL) %>%
   # Add indicators for solicitations that booked in the same year they hit the stage
-  mutate(FY.Plan.Book = FY.plan & Booked,
-         FY.Clear.Book = FY.clear & Booked,
-         FY.Ask.Book = FY.ask & Booked,
-         FY.Oral.Book = FY.oral & Booked)
+  mutate(FY.Plan.Book = FY.plan*Booked==1,
+         FY.Clear.Book = FY.clear*Booked==1,
+         FY.Ask.Book = FY.ask*Booked==1,
+         FY.Oral.Book = FY.oral*Booked==1)
