@@ -5,6 +5,8 @@ date: "March 29, 2016"
 output: html_document
 ---
 
+Source can be viewed [on GitHub](https://github.com/phively/gsb-sols-proj/blob/master/1%20Data%20exploration%20commentary.Rmd).
+
 # Problem statement
 
 My goal is to find a way to accurately forecast fundraising revenue.
@@ -25,11 +27,13 @@ The dataset includes all closed (successful = booked, or unsuccessful = not book
 #### Run Rscript0 to load useful packages and functions ----
 source("Rscript0 - libraries.R")
 source("f.Wrangle.R")
-```
-```{r, message=F, cache=F}
 #### Run Rscript1 to load data ----
 source("Rscript1 - data load and transform.R")
 ```
+
+* [Rscript0 - libraries.R](https://github.com/phively/gsb-sols-proj/blob/master/Rscript0%20-%20libraries.R)
+* [f.Wrangle.R](https://github.com/phively/gsb-sols-proj/blob/master/f.Wrangle.R)
+* [Rscript1 - data load and transform.R](https://github.com/phively/gsb-sols-proj/blob/master/Rscript1%20-%20data%20load%20and%20transform.R)
 
 Begin with some visualizations of time in each stage:
 
@@ -76,6 +80,8 @@ Here's the cleaned up data file:
 source("Rscript1a - modeling data appends.R")
 colnames(mdat)
 ```
+
+* [Rscript1a - modeling data appends.R](https://github.com/phively/gsb-sols-proj/blob/master/Rscript1a%20-%20modeling%20data%20appends.R)
 
 **Booked** indicates whether the solicitation came in at $>$$0, and **FY.plan, FY.clear, FY.ask, FY.oral** indicate whether the solicitation closed in the same fiscal year as that stage was reached, while the corresponding **FY.[Stage].Book** indicates that a solicitation was booked in the same fiscal year that it reached that stage. Combinations of these indicators will be the dependent variables. **plan2actual, clear2actual, ask2actual, oral2actual** are measured in days. **Planned.Dt** is the planned *ask* date, while **Planning.Dt** is the date the solicitation entered the planning stage. The other covariates should be self-explanatory.
 
@@ -151,8 +157,6 @@ Confidence bands are based on the variance for a binomial random variable, $\sqr
 This is fascinating; a solicitation entering plan or clear in January or plan in April-July is likely to be refused rather than booked. Is there a specific year driving that?
 
 ```{r, echo=F, warning=F, cache=F}
-## Function to convert calendar to fiscal year
-YtoFY <- function(x){return(as.numeric(ifelse(month(x)>=7,1,0) + year(x)))}
 ## Redo previous plots for each fiscal year
 tmp <- mdat %>% select(Planning.Dt, Clear.Dt, Ask.Dt, Oral.Dt, Booked) %>%
   mutate(Count=1, PlanY=YtoFY(Planning.Dt), Plan=as.numeric(month(Planning.Dt)),
@@ -285,11 +289,11 @@ ggplot(ggdat, aes(x=Month, y=Count, color=Booked.In.FY, group=Booked.In.FY)) + g
 ggplot(ggdat, aes(x=Month, y=Prop, color=Booked.In.FY, fill=Booked.In.FY, group=Booked.In.FY)) + geom_point() + geom_line(alpha=.5) + geom_ribbon(aes(ymin=Prop-ci, ymax=Prop+ci), alpha=.15) + labs(y="Percent") + theme(text=element_text(size=12)) + facet_grid(Stage~.) + scale_y_continuous(labels=percent)
 ```
 
-There are a couple of crossover points; January for Plan and Clear; Jan for ask (though it crosses back in March interestingly). Can't count on oral pledges made in May or June coming in before the end of the year. Let's focus on asks in the MG range, $x\in[\$100\textrm{k},\$5\textrm{M})$:
+There are a couple of crossover points; January for Plan and Clear; Jan for ask (though it crosses back in March interestingly). Can't count on oral pledges made in May or June coming in before the end of the year. Let's focus on asks in the MG range, $x\in[\$25\text{k},\$5\text{M})$:
 
 ```{r, echo=F, warning=F, cache=F}
 # Data manupulation
-ggdat <- na.omit(mdat %>% mutate(GiftSize=ifelse(Ask.Amt>=5000000,"PG",ifelse(Ask.Amt>=100000,"MG",ifelse(Ask.Amt<100000,"AF","Unasked")))) %>% mutate(Plan=as.numeric(month(Planning.Dt)), Clear=as.numeric(month(Clear.Dt)), Ask=as.numeric(month(Ask.Dt)), Oral=as.numeric(month(Oral.Dt)), Count=1) %>% select(Count, Plan, Clear, Ask, Oral, FY.Plan.Book, FY.Clear.Book, FY.Ask.Book, FY.Oral.Book, GiftSize) %>% gather("Stage", "Month", 2:5) %>% gather("Outcome", "Booked.In.FY", 2:5) %>% 
+ggdat <- na.omit(mdat %>% mutate(GiftSize=ifelse(Ask.Amt>=5000000,"PG",ifelse(Ask.Amt>=25000,"MG",ifelse(Ask.Amt<25000,"AF","Unasked")))) %>% mutate(Plan=as.numeric(month(Planning.Dt)), Clear=as.numeric(month(Clear.Dt)), Ask=as.numeric(month(Ask.Dt)), Oral=as.numeric(month(Oral.Dt)), Count=1) %>% select(Count, Plan, Clear, Ask, Oral, FY.Plan.Book, FY.Clear.Book, FY.Ask.Book, FY.Oral.Book, GiftSize) %>% gather("Stage", "Month", 2:5) %>% gather("Outcome", "Booked.In.FY", 2:5) %>% 
   # Need to get rid of mismatched rows, e.g. where Stage=Ask and Outcome=FY.Clear.Book
   filter((Stage=="Plan" & Outcome=="FY.Plan.Book") | (Stage=="Clear" & Outcome=="FY.Clear.Book") | (Stage=="Ask" & Outcome=="FY.Ask.Book") | (Stage=="Oral" & Outcome=="FY.Oral.Book")) %>% mutate(Month=factor(Month, labels=strtrim(month.name, 3))) %>% group_by(GiftSize, Stage, Month, Booked.In.FY) %>% summarise(Count=sum(Count)))
 # Reorder months to be in fiscal order

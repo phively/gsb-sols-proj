@@ -26,6 +26,7 @@ JMod <- function(curr.stage, curr.dt, expected.dt, expect.amt=0, act.amt=0, clos
   return(out)
 }
 
-#### Calculates the confusion matrix for JMod given probability vectors and the actual outcome ----
-JMod.confusion <- function(probs, threshold, truth){
+#### Calculates the error for JMod given the probability vectors and actual outcome ----
+JMod.err <- function(probs, truth){
+  return(probs-truth)
 }

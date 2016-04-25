@@ -21,6 +21,10 @@ source("f.Wrangle.R")
 source("Rscript1a - modeling data appends.R")
 ```
 
+* [Rscript0 - libraries.R](https://github.com/phively/gsb-sols-proj/blob/master/Rscript0%20-%20libraries.R)
+* [f.Wrangle.R](https://github.com/phively/gsb-sols-proj/blob/master/f.Wrangle.R)
+* [Rscript1a - modeling data appends.R](https://github.com/phively/gsb-sols-proj/blob/master/Rscript1a%20-%20modeling%20data%20appends.R)
+
 Recall:
 
 > The existing model ("JMod") has two components. First, the probability a solicitation $S_{i}$ comes in before the end of the fiscal year is a function of the current stage progress $c$ and time until the end of the year $t$, $P(S_{i}=1)=f(c_{i},t)$. The expected FRP in the current fiscal year is this probability times the expected amount, $E(FRP)=P(S_{i}=1)E(S_{i})$.
@@ -63,7 +67,7 @@ dev.comp <- function(models, modnames, debug=F){
 }
 
 ## Function to generate confusion matrix
-confusion <- function(models, threshold, modnames, debug=F){
+confusion <- function(models, threshold, modnames, counts=T, digits=2, debug=F){
   out <- list()
   # Check if not actually passed a list of models
   is.list <- class(models)[1]=="list"
@@ -74,11 +78,16 @@ confusion <- function(models, threshold, modnames, debug=F){
   for(i in 1:n){
     # Extract the current model
     if(is.list) {m <- models[[i]]} else {m <- models}
-    out[[i]] <- table(truth=model.frame(m)[,1], pred=fitted(m)>=threshold)
+    tabl <- table(truth=model.frame(m)[,1], pred=fitted(m)>=threshold)
+    if(counts) {out[[i]] <- addmargins(tabl)}
+    if(!counts){out[[i]] <- signif(addmargins(prop.table(tabl)), digits)}
   }
   names(out) <- modnames
   return(out)
 }
+
+## Function to return binomial error vectors
+
 ```
 ```{r, message=F, warning=F, cache=F}
 ## Model each stage by when it was asked 
@@ -98,21 +107,45 @@ JMod has the following structure. Cell entries are probability to close given th
 ```{r, echo=F, message=F, warning=F, cache=F}
 library(MASS) #to write results in fractional form
 fractions(matrix(c(1/6,1/3,2/3,1, 1/8,1/6,1/3,1, 0,1/8,1/6,1, 0,0,1/8,1), nrow=4, dimnames=list(c(Stage=c("Plan","Clear","Ask","Oral")), c("July.to.Feb", "Mar.to.Apr", "May", "June"))))
-detach(package:MASS) #clean up because MASS conflicts with dplyr
+detach(package:MASS) #clean up because MASS::select conflicts with dplyr::select
 ```
 
-Compare confusion matrices for JMod versus the month intercepts logistic model by stage.
+Here are the confusion matrices, with a classification threshold of $p=.5$:
 
 ```{r, message=F, warning=F, cache=F}
 print("Logistic models")
-confusion(list(glm.pln.1, glm.clr.1, glm.ask.1, glm.ora.1), threshold=.5, modnames=modnames, debug=F)
+# Count tables
+confusion(list(glm.pln.1, glm.clr.1, glm.ask.1, glm.ora.1), threshold=.5, modnames=modnames)
+# Proportion tables
+confusion(list(glm.pln.1, glm.clr.1, glm.ask.1, glm.ora.1), threshold=.5, modnames=modnames, counts=F)
 ```
+
+Compare errors for JMod versus the month intercepts logistic model by stage. The error function is
+
+$$\epsilon_{i} = \left|p_{pred}-p_{actual}\right|$$
 
 ```{r, message=F, warning=F, cache=F}
 ## Load functions for JMod
 source("f.JMod.R")
-print("JMod")
-JMod(curr.stage=1, curr.dt=mdat$Planning.Dt, expected.dt=mdat$Expected.Dt)$probability
+```
+
+* [f.JMod.R](https://github.com/phively/gsb-sols-proj/blob/master/f.JMod.R)
+
+```{r, echo=F, message=F, warning=F, cache=F}
+## Planning stage
+print("Plan")
+# Residuals
+jmod <- JMod.err(probs=JMod(curr.stage=1, curr.dt=mdat$Planning.Dt, expected.dt=mdat$Expected.Dt)$probability, truth=mdat$FY.Plan.Book)
+glmod <- JMod.err(probs=glm.pln.1$fitted, truth=model.frame(glm.pln.1)[,1])
+# Combined residuals
+data.frame(jmod=sum(abs(jmod)), glm=sum(abs(glmod)))
+
+print("Clear")
+data.frame(JMod=sum(abs(JMod.err(probs=JMod(curr.stage=2, curr.dt=mdat$Clear.Dt, expected.dt=mdat$Expected.Dt)$probability, truth=mdat$FY.Clear.Book)), na.rm=T), glm=sum(abs(JMod.err(probs=glm.clr.1$fitted, truth=mdat$FY.Clear.Book)), na.rm=T))
+print("Ask")
+data.frame(JMod=sum(abs(JMod.err(probs=JMod(curr.stage=3, curr.dt=mdat$Ask.Dt, expected.dt=mdat$Expected.Dt)$probability, truth=mdat$FY.Ask.Book)), na.rm=T), glm=sum(abs(JMod.err(probs=glm.ask.1$fitted, truth=mdat$FY.Ask.Book)), na.rm=T))
+print("Oral")
+data.frame(JMod=sum(abs(JMod.err(probs=JMod(curr.stage=4, curr.dt=mdat$Oral.Dt, expected.dt=mdat$Expected.Dt)$probability, truth=mdat$FY.Oral.Book)), na.rm=T), glm=sum(abs(JMod.err(probs=glm.ora.1$fitted, truth=mdat$FY.Oral.Book)), na.rm=T))
 ```
 
 Potentially interesting derived variables include $t$, the number of days left in the year, and $\Delta t$, the amount of time that's passed since the previous stage.

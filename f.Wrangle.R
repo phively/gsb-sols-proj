@@ -25,5 +25,8 @@ toNumeric <- function(data, fields){
   return(data)
 }
 
+#### Convert calendar to fiscal year ----
+YtoFY <- function(x){return(as.numeric(ifelse(month(x)>=7,1,0) + year(x)))}
+
 #### Return end of the fiscal year ----
 fye <- function(date){ymd(as.character(paste(round(month(date)/13)+year(date),"06","30", sep="-")))}
