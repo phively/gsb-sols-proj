@@ -121,8 +121,9 @@ $(document).ready(function () {
 <div id="first-attempt" class="section level2">
 <h2>First attempt</h2>
 <p>Begin by loading the data used for the visualizations in part 1.</p>
-<pre class="r"><code>#### Run Rscript0 to load useful packages ----
-source(&quot;Rscript0 - libraries.R&quot;)</code></pre>
+<pre class="r"><code>#### Run Rscript0 to load useful packages and functions ----
+source(&quot;Rscript0 - libraries.R&quot;)
+source(&quot;f.Wrangle.R&quot;)</code></pre>
 <pre class="r"><code>#### Model data cleanup ----
 source(&quot;Rscript1a - modeling data appends.R&quot;)</code></pre>
 <p>Recall:</p>
@@ -132,7 +133,7 @@ source(&quot;Rscript1a - modeling data appends.R&quot;)</code></pre>
 <p><span class="math">\[P(S_{ij}=1)=f(c_{i},t,\mu,t_{i}^{*},a_{j}^{*},a_{j})\]</span></p>
 </blockquote>
 <p>Start by trying to directly predict the booked in FY probabilities. The simplest approach is to treat everything that isn’t continuous as a factor and chuck it into a logistic regression model.</p>
-<p><span class="math">\[logit(p)=log\Big(\frac{p}{1-p}\Big)=\eta\]</span> <span class="math">\[\eta_{i}=c_{i}+t_{i}^{*}\]</span></p>
+<p><span class="math">\[logit(p)=log\Big(\frac{p}{1-p}\Big)=\eta\]</span> <span class="math">\[E(\eta_{i})=c_{i}+t_{i}^{*}\]</span></p>
 <p>In other words, the logit of the expected close rate is dependent on some intercept <span class="math">\(c_{i}\)</span> due to stage, and some month effect <span class="math">\(t_{i}^{*}\)</span>.</p>
 <pre class="r"><code>## Model each stage by when it was asked 
 glm.pln.1 &lt;- glm(FY.Plan.Book ~ as.factor(month(mdat$Planning.Dt)), data=mdat, family=binomial())
@@ -198,32 +199,90 @@ kable(dev.comp(models=list(glm.pln.1, glm.clr.1, glm.ask.1, glm.ora.1), modnames
 </tr>
 </tbody>
 </table>
-<p>Stuff</p>
-<pre class="r"><code>confusion(list(glm.pln.1, glm.clr.1, glm.ask.1, glm.ora.1), threshold=.5, modnames=modnames, debug=F)</code></pre>
+<p>Month-by-month coefficients result in an unambiguously better model compared to just an intercept per stage.</p>
+<p>JMod has the following structure. Cell entries are probability to close given that a solicitation is in the indicated stage and month, with an expected close date that fiscal year:</p>
+<pre><code>##       July.to.Feb Mar.to.Apr May June
+## Plan  1/6         1/8          0   0 
+## Clear 1/3         1/6        1/8   0 
+## Ask   2/3         1/3        1/6 1/8 
+## Oral    1           1          1   1</code></pre>
+<p>Here are the confusion matrices, with a classification threshold of <span class="math">\(p=.5\)</span>:</p>
+<pre class="r"><code>print(&quot;Logistic models&quot;)</code></pre>
+<pre><code>## [1] &quot;Logistic models&quot;</code></pre>
+<pre class="r"><code># Count tables
+confusion(list(glm.pln.1, glm.clr.1, glm.ask.1, glm.ora.1), threshold=.5, modnames=modnames)</code></pre>
 <pre><code>## $Plan
 ##        pred
-## truth   FALSE TRUE
-##   FALSE   520  247
-##   TRUE    186  356
+## truth   FALSE TRUE  Sum
+##   FALSE   520  247  767
+##   TRUE    186  356  542
+##   Sum     706  603 1309
 ## 
 ## $Clear
 ##        pred
-## truth   FALSE TRUE
-##   FALSE   323  257
-##   TRUE    218  395
+## truth   FALSE TRUE  Sum
+##   FALSE   323  257  580
+##   TRUE    218  395  613
+##   Sum     541  652 1193
 ## 
 ## $Ask
 ##        pred
-## truth   FALSE TRUE
-##   FALSE   264  252
-##   TRUE    215  406
+## truth   FALSE TRUE  Sum
+##   FALSE   264  252  516
+##   TRUE    215  406  621
+##   Sum     479  658 1137
 ## 
 ## $Oral
 ##        pred
-## truth   FALSE TRUE
-##   FALSE    19   52
-##   TRUE     14  277</code></pre>
-<p>Confusion matrices</p>
+## truth   FALSE TRUE Sum
+##   FALSE    19   52  71
+##   TRUE     14  277 291
+##   Sum      33  329 362</code></pre>
+<pre class="r"><code># Proportion tables
+confusion(list(glm.pln.1, glm.clr.1, glm.ask.1, glm.ora.1), threshold=.5, modnames=modnames, counts=F)</code></pre>
+<pre><code>## $Plan
+##        pred
+## truth   FALSE TRUE  Sum
+##   FALSE  0.40 0.19 0.59
+##   TRUE   0.14 0.27 0.41
+##   Sum    0.54 0.46 1.00
+## 
+## $Clear
+##        pred
+## truth   FALSE TRUE  Sum
+##   FALSE  0.27 0.22 0.49
+##   TRUE   0.18 0.33 0.51
+##   Sum    0.45 0.55 1.00
+## 
+## $Ask
+##        pred
+## truth   FALSE TRUE  Sum
+##   FALSE  0.23 0.22 0.45
+##   TRUE   0.19 0.36 0.55
+##   Sum    0.42 0.58 1.00
+## 
+## $Oral
+##        pred
+## truth   FALSE  TRUE   Sum
+##   FALSE 0.052 0.140 0.200
+##   TRUE  0.039 0.770 0.800
+##   Sum   0.091 0.910 1.000</code></pre>
+<p>Compare errors for JMod versus the month intercepts logistic model by stage. The error function is</p>
+<p><span class="math">\[\epsilon_{i} = \left|p_{pred}-p_{actual}\right|\]</span></p>
+<pre class="r"><code>## Load functions for JMod
+source(&quot;f.JMod.R&quot;)</code></pre>
+<pre><code>## [1] &quot;Plan&quot;</code></pre>
+<pre><code>##       jmod      glm
+## 1 502.1667 543.5126</code></pre>
+<pre><code>## [1] &quot;Clear&quot;</code></pre>
+<pre><code>##       JMod      glm
+## 1 525.0833 575.5222</code></pre>
+<pre><code>## [1] &quot;Ask&quot;</code></pre>
+<pre><code>##       JMod      glm
+## 1 438.8333 557.1074</code></pre>
+<pre><code>## [1] &quot;Oral&quot;</code></pre>
+<pre><code>##   JMod      glm
+## 1   43 115.3126</code></pre>
 <p>Potentially interesting derived variables include <span class="math">\(t\)</span>, the number of days left in the year, and <span class="math">\(\Delta t\)</span>, the amount of time that’s passed since the previous stage.</p>
 </div>
 </div>
@@ -238,7 +297,7 @@ kable(dev.comp(models=list(glm.pln.1, glm.clr.1, glm.ask.1, glm.ora.1), modnames
 ##  language (EN)                                       
 ##  collate  English_United States.1252                 
 ##  tz       America/Chicago                            
-##  date     2016-04-20</code></pre>
+##  date     2016-04-25</code></pre>
 <pre><code>## Packages ------------------------------------------------------------------</code></pre>
 <pre><code>##  package    * version date       source        
 ##  assertthat   0.1     2013-12-06 CRAN (R 3.2.2)
@@ -258,6 +317,7 @@ kable(dev.comp(models=list(glm.pln.1, glm.clr.1, glm.ask.1, glm.ora.1), modnames
 ##  lazyeval     0.1.10  2015-01-02 CRAN (R 3.2.2)
 ##  lubridate  * 1.5.0   2015-12-03 CRAN (R 3.2.3)
 ##  magrittr     1.5     2014-11-22 CRAN (R 3.2.2)
+##  MASS         7.3-45  2015-11-10 CRAN (R 3.2.4)
 ##  memoise      1.0.0   2016-01-29 CRAN (R 3.2.4)
 ##  munsell      0.4.2   2013-07-11 CRAN (R 3.2.2)
 ##  plyr         1.8.3   2015-06-12 CRAN (R 3.2.2)
