@@ -22,8 +22,9 @@ It makes sense to start with a few straightforward classifiers, but I'd also lik
 The dataset includes all closed (successful = booked, or unsuccessful = not booked) solicitations with an add date on or after 7/1/2011. Data is obtained from the first tab of the "Booth solicitation history" report (saved as a .csv).
 
 ```{r, message=F, cache=F}
-#### Run Rscript0 to load useful packages ----
+#### Run Rscript0 to load useful packages and functions ----
 source("Rscript0 - libraries.R")
+source("f.Wrangle.R")
 ```
 ```{r, message=F, cache=F}
 #### Run Rscript1 to load data ----

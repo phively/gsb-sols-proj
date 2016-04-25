@@ -1,27 +1,4 @@
-#### Useful functions for wrangling ----
-renamer <- function(data, old, new){ #args(dataset, old column name(s), new column name)
-  for (i in 1:max(length(old),1)){
-    try(colnames(data)[which(colnames(data)==old[i])] <- new, silent=T)
-  }
-  return(data)
-}
-
-toDate <- function(data, fields){
-  for (i in 1:length(fields)){
-    try({tmp <- c(unlist(data[fields[i]])); data[fields[i]] <- mdy(tmp)}, silent=T)
-  }
-  return(data)
-}
-
-toNumeric <- function(data, fields){
-  for (i in 1:length(fields)){
-    try({
-      tmp <- gsub("(\\$|,)", "", c(unlist(data[fields[i]]))) #get rid of dollar signs and whatnot;
-      data[fields[i]] <- as.numeric(tmp)
-    }, silent=T)
-  }
-  return(data)
-}
+#### Requires the functions in f.Wrangle.R to be loaded
 
 #### Today's data ----
 

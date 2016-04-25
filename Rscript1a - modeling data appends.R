@@ -1,8 +1,5 @@
 #### Model data cleanup ----
 
-# Function to return end of the fiscal year
-fye <- function(date){ymd(as.character(paste(round(month(date)/13)+year(date),"06","30", sep="-")))}
-
 # Load data saved in Rscript1
 
 mdat <- read.csv("modeling.txt", sep="\t", stringsAsFactors=F)
