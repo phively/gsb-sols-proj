@@ -5,6 +5,8 @@ date: "April 14, 2016"
 output: html_document
 ---
 
+Source can be viewed [on GitHub](https://github.com/phively/gsb-sols-proj/blob/master/2%20Training%20and%20model%20selection.Rmd)
+
 # Logistic modeling
 
 ## First attempt
@@ -120,7 +122,7 @@ confusion(list(glm.pln.1, glm.clr.1, glm.ask.1, glm.ora.1), threshold=.5, modnam
 confusion(list(glm.pln.1, glm.clr.1, glm.ask.1, glm.ora.1), threshold=.5, modnames=modnames, counts=F)
 ```
 
-Compare errors for JMod versus the month intercepts logistic model by stage. The error function is
+Compare errors for JMod versus the month intercepts logistic model by stage. My error function is
 
 $$\epsilon_{i} = \left|p_{pred}-p_{actual}\right|$$
 
@@ -133,22 +135,73 @@ source("f.JMod.R")
 
 ```{r, echo=F, message=F, warning=F, cache=F}
 ## Planning stage
-print("Plan")
 # Residuals
 jmod <- JMod.err(probs=JMod(curr.stage=1, curr.dt=mdat$Planning.Dt, expected.dt=mdat$Expected.Dt)$probability, truth=mdat$FY.Plan.Book)
 glmod <- JMod.err(probs=glm.pln.1$fitted, truth=model.frame(glm.pln.1)[,1])
 # Combined residuals
+print("Plan absolute residual sum")
 data.frame(jmod=sum(abs(jmod)), glm=sum(abs(glmod)))
-
-print("Clear")
-data.frame(JMod=sum(abs(JMod.err(probs=JMod(curr.stage=2, curr.dt=mdat$Clear.Dt, expected.dt=mdat$Expected.Dt)$probability, truth=mdat$FY.Clear.Book)), na.rm=T), glm=sum(abs(JMod.err(probs=glm.clr.1$fitted, truth=mdat$FY.Clear.Book)), na.rm=T))
-print("Ask")
-data.frame(JMod=sum(abs(JMod.err(probs=JMod(curr.stage=3, curr.dt=mdat$Ask.Dt, expected.dt=mdat$Expected.Dt)$probability, truth=mdat$FY.Ask.Book)), na.rm=T), glm=sum(abs(JMod.err(probs=glm.ask.1$fitted, truth=mdat$FY.Ask.Book)), na.rm=T))
-print("Oral")
-data.frame(JMod=sum(abs(JMod.err(probs=JMod(curr.stage=4, curr.dt=mdat$Oral.Dt, expected.dt=mdat$Expected.Dt)$probability, truth=mdat$FY.Oral.Book)), na.rm=T), glm=sum(abs(JMod.err(probs=glm.ora.1$fitted, truth=mdat$FY.Oral.Book)), na.rm=T))
+ggdat <- data.frame(jmod, glm=glmod, closed=mdat$FY.Plan.Book)
+ggplot(ggdat, aes(x=glm, y=jmod, color=closed)) + geom_point() + geom_hline(yintercept=mean(jmod), alpha=.3) + geom_vline(xintercept=mean(glmod), alpha=.3) + labs(title="Plan JMod versus glm residual error and bias")
 ```
 
-Potentially interesting derived variables include $t$, the number of days left in the year, and $\Delta t$, the amount of time that's passed since the previous stage.
+JMod wins on the sum of absolute residuals, but it is very negatively biased, to the tune of $-0.325$.
+
+```{r, echo=F, message=F, warning=F, cache=F}
+## Clear stage
+# Residuals
+jmod <- na.omit(JMod.err(probs=JMod(curr.stage=2, curr.dt=mdat$Clear.Dt, expected.dt=mdat$Expected.Dt)$probability, truth=mdat$FY.Clear.Book))
+glmod <- JMod.err(probs=glm.clr.1$fitted, truth=model.frame(glm.clr.1)[,1])
+# Combined residuals
+print("Clear absolute residual sum")
+data.frame(jmod=sum(abs(jmod)), glm=sum(abs(glmod)))
+ggdat <- data.frame(jmod, glm=glmod, closed=na.omit(mdat$FY.Clear.Book))
+ggplot(ggdat, aes(x=glm, y=jmod, color=closed)) + geom_point() + geom_hline(yintercept=mean(jmod), alpha=.3) + geom_vline(xintercept=mean(glmod), alpha=.3) + labs(title="Clear JMod versus glm residual error and bias")
+```
+
+A tiny bit closer on the sum of absolute residuals, but JMod is still negatively biased, around $-0.295$
+
+```{r, echo=F, message=F, warning=F, cache=F}
+## Ask stage
+# Residuals
+jmod <- na.omit(JMod.err(probs=JMod(curr.stage=3, curr.dt=mdat$Ask.Dt, expected.dt=mdat$Expected.Dt)$probability, truth=mdat$FY.Ask.Book))
+glmod <- JMod.err(probs=glm.ask.1$fitted, truth=model.frame(glm.ask.1)[,1])
+# Combined residuals
+print("Ask absolute residual sum")
+data.frame(jmod=sum(abs(jmod)), glm=sum(abs(glmod)))
+ggdat <- data.frame(jmod, glm=glmod, closed=na.omit(mdat$FY.Ask.Book))
+ggplot(ggdat, aes(x=glm, y=jmod, color=closed)) + geom_point() + geom_hline(yintercept=mean(jmod), alpha=.3) + geom_vline(xintercept=mean(glmod), alpha=.3) + labs(title="Ask JMod versus glm residual error and bias")
+```
+
+Clear win for JMod; bias is only $-0.104$.
+
+```{r, echo=F, message=F, warning=F, cache=F}
+## Oral stage
+# Residuals
+jmod <- na.omit(JMod.err(probs=JMod(curr.stage=4, curr.dt=mdat$Oral.Dt, expected.dt=mdat$Expected.Dt)$probability, truth=mdat$FY.Oral.Book))
+glmod <- JMod.err(probs=glm.ora.1$fitted, truth=model.frame(glm.ora.1)[,1])
+# Combined residuals
+print("Oral absolute residual sum")
+data.frame(jmod=sum(abs(jmod)), glm=sum(abs(glmod)))
+ggdat <- data.frame(jmod, glm=glmod, closed=na.omit(mdat$FY.Oral.Book))
+ggplot(ggdat, aes(x=glm, y=jmod, color=closed)) + geom_point() + geom_hline(yintercept=mean(jmod), alpha=.3) + geom_vline(xintercept=mean(glmod), alpha=.3) + labs(title="Oral JMod versus glm residual error and bias")
+```
+
+JMod bias is $0.047$.
+
+Basically, what this comes down to is how concerned are we about bias? The negative bias is due to overaggressive discounting as the end of the fiscal year (June 30) approaches.
+
+From [part 1](https://github.com/phively/gsb-sols-proj/blob/master/1%20Data%20exploration%20commentary.Rmd), some interesting variables include **expected amount**, and whether **ask amount/planned ask** is greater or less than 1. Potentially interesting derived variables include the **number of days left in the year**, the **number of days until expected close**, and the **amount of time that's passed since the previous stage**.
+
+Some other thoughts.
+
+1. Is logistic regression really suitable (overdispersion)?
+2. Should it be restricted to MG-range gifts, $[\text{$}25\text{k},\text{$}5\text{M})$?
+3. What nonparametric methods are worth trying?
+
+Think about #3 first. I'm a fan of classification trees, and that's closest to the existing approach. It would also be interesting to see which of the proposed variables end up being chosen.
+
+
 
 # Packages used
 ```{r}
