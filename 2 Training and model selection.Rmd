@@ -199,7 +199,24 @@ Some other thoughts.
 2. Should it be restricted to MG-range gifts, $[\text{$}25\text{k},\text{$}5\text{M})$?
 3. What nonparametric methods are worth trying?
 
+# Variable selection
+
+Create those derived variables.
+
+```{r, message=F, warning=F, cache=F}
+## Derived variables
+
+```
+
+<Insert GitHub link>
+
 Think about #3 first. I'm a fan of classification trees, and that's closest to the existing approach. It would also be interesting to see which of the proposed variables end up being chosen.
+
+Try the random forest approach to select variables....
+
+```{r, message=F, warning=F, cache=F}
+library(randomForest)
+```
 
 
 
