@@ -57,26 +57,27 @@ glm.ask.1 <- glm(FY.Ask.Book ~ as.factor(month(mdat$Planning.Dt)), data=mdat, fa
 glm.ora.1 <- glm(FY.Oral.Book ~ as.factor(month(mdat$Planning.Dt)), data=mdat, family=binomial())
 modnames <- c("Plan","Clear","Ask","Oral")
 # Compare each of the models
-kable(dev.comp(models=list(glm.pln.1, glm.clr.1, glm.ask.1, glm.ora.1), modnames=modnames, debug=F), digits=3)
+kable(CompareDeviances(models=list(glm.pln.1, glm.clr.1, glm.ask.1, glm.ora.1), modnames=modnames, debug=F), digits=3)
 ```
 
 Month-by-month coefficients result in an unambiguously better model compared to just an intercept per stage.
 
 JMod has the following structure. Cell entries are probability to close given that a solicitation is in the indicated stage and month, with an expected close date that fiscal year:
 
-```{r, echo=F, message=F, warning=F, cache=F}
-library(MASS) #to write results in fractional form
-fractions(matrix(c(1/6,1/3,2/3,1, 1/8,1/6,1/3,1, 0,1/8,1/6,1, 0,0,1/8,1), nrow=4, dimnames=list(c(Stage=c("Plan","Clear","Ask","Oral")), c("July.to.Feb", "Mar.to.Apr", "May", "June"))))
-detach(package:MASS) #clean up because MASS::select conflicts with dplyr::select
-```
+| Stage  | July-Feb| Mar-Apr |   May   |  June   |
+|--------|:-------:|:-------:|:-------:|:-------:| 
+| Plan   |  1/6    | 1/8     | 0       |   0     |
+| Clear  |  1/3    | 1/6     | 1/8     |   0     |
+| Ask    |  2/3    | 1/3     | 1/6     |   1/8   |
+| Oral   |  1      | 1       | 1       |   1     |
 
 Here are the confusion matrices, with a classification threshold of $p=.5$:
 
 ```{r, message=F, warning=F, cache=F}
 # Count tables
-confusion(list(glm.pln.1, glm.clr.1, glm.ask.1, glm.ora.1), threshold=.5, modnames=modnames)
+ConfusionMatrix(list(glm.pln.1, glm.clr.1, glm.ask.1, glm.ora.1), modnames=modnames)
 # Proportion tables
-confusion(list(glm.pln.1, glm.clr.1, glm.ask.1, glm.ora.1), threshold=.5, modnames=modnames, counts=F)
+ConfusionMatrix(list(glm.pln.1, glm.clr.1, glm.ask.1, glm.ora.1), modnames=modnames, counts=F)
 ```
 
 Compare errors for JMod versus the month intercepts logistic model by stage. My error function is the $L_{1}$ norm:
@@ -96,13 +97,13 @@ source("f.JMod.R")
 ## Planning stage
 # Residuals
 jmod.1 <- JMod(curr.stage=1, curr.dt=mdat$Planning.Dt, expected.dt=mdat$Expected.Dt)
-jmod <- na.omit(JMod.err(probs=jmod.1$prob, truth=mdat$FY.Plan.Book))
-glmod <- JMod.err(probs=glm.pln.1$fitted, truth=model.frame(glm.pln.1)[,1])
+jmod <- na.omit(JModError(probs=jmod.1$prob, truth=mdat$FY.Plan.Book))
+glmod <- JModError(probs=glm.pln.1$fitted, truth=model.frame(glm.pln.1)[,1])
 # Combined residuals
 ggdat <- data.frame(jmod, glm=glmod, closed=na.omit(mdat$FY.Plan.Book))
 ggplot(ggdat, aes(x=glm, y=jmod, color=closed)) + geom_point() + geom_hline(yintercept=mean(jmod), alpha=.3) + geom_vline(xintercept=mean(glmod), alpha=.3) + labs(title="Plan JMod versus glm residual error and bias") + xlim(c(-1,1)) + ylim(c(-1,1))
 # Metrics
-matrix(c(lpnorm(jmod, p=1), lpnorm(jmod)^2, lpnorm(glmod, p=1), lpnorm(glmod)^2), nrow=2, dimnames=list(c("L1","L2"),c("JMod","glm")))
+matrix(c(LpNorm(jmod, p=1), LpNorm(jmod)^2, LpNorm(glmod, p=1), LpNorm(glmod)^2), nrow=2, dimnames=list(c("L1","L2"),c("JMod","glm")))
 ```
 
 JMod wins on the sum of absolute residuals, but it is very negatively biased, to the tune of $-0.325$.
@@ -111,13 +112,13 @@ JMod wins on the sum of absolute residuals, but it is very negatively biased, to
 ## Clear stage
 # Residuals
 jmod.2 <- JMod(curr.stage=2, curr.dt=mdat$Clear.Dt, expected.dt=mdat$Expected.Dt)
-jmod <- na.omit(JMod.err(probs=jmod.2$prob, truth=mdat$FY.Clear.Book))
-glmod <- JMod.err(probs=glm.clr.1$fitted, truth=model.frame(glm.clr.1)[,1])
+jmod <- na.omit(JModError(probs=jmod.2$prob, truth=mdat$FY.Clear.Book))
+glmod <- JModError(probs=glm.clr.1$fitted, truth=model.frame(glm.clr.1)[,1])
 # Combined residuals
 ggdat <- data.frame(jmod, glm=glmod, closed=na.omit(mdat$FY.Clear.Book))
 ggplot(ggdat, aes(x=glm, y=jmod, color=closed)) + geom_point() + geom_hline(yintercept=mean(jmod), alpha=.3) + geom_vline(xintercept=mean(glmod), alpha=.3) + labs(title="Clear JMod versus glm residual error and bias") + xlim(c(-1,1)) + ylim(c(-1,1))
 # Metrics
-matrix(c(lpnorm(jmod, p=1), lpnorm(jmod)^2, lpnorm(glmod, p=1), lpnorm(glmod)^2), nrow=2, dimnames=list(c("L1","L2"),c("JMod","glm")))
+matrix(c(LpNorm(jmod, p=1), LpNorm(jmod)^2, LpNorm(glmod, p=1), LpNorm(glmod)^2), nrow=2, dimnames=list(c("L1","L2"),c("JMod","glm")))
 ```
 
 A tiny bit closer on the sum of absolute residuals, but JMod is still negatively biased, around $-0.295$
@@ -126,13 +127,13 @@ A tiny bit closer on the sum of absolute residuals, but JMod is still negatively
 ## Ask stage
 # Residuals
 jmod.3 <- JMod(curr.stage=3, curr.dt=mdat$Ask.Dt, expected.dt=mdat$Expected.Dt)
-jmod <- na.omit(JMod.err(probs=jmod.3$prob, truth=mdat$FY.Ask.Book))
-glmod <- JMod.err(probs=glm.ask.1$fitted, truth=model.frame(glm.ask.1)[,1])
+jmod <- na.omit(JModError(probs=jmod.3$prob, truth=mdat$FY.Ask.Book))
+glmod <- JModError(probs=glm.ask.1$fitted, truth=model.frame(glm.ask.1)[,1])
 # Combined residuals
 ggdat <- data.frame(jmod, glm=glmod, closed=na.omit(mdat$FY.Ask.Book))
 ggplot(ggdat, aes(x=glm, y=jmod, color=closed)) + geom_point() + geom_hline(yintercept=mean(jmod), alpha=.3) + geom_vline(xintercept=mean(glmod), alpha=.3) + labs(title="Ask JMod versus glm residual error and bias") + xlim(c(-1,1)) + ylim(c(-1,1))
 # Metrics
-matrix(c(lpnorm(jmod, p=1), lpnorm(jmod)^2, lpnorm(glmod, p=1), lpnorm(glmod)^2), nrow=2, dimnames=list(c("L1","L2"),c("JMod","glm")))
+matrix(c(LpNorm(jmod, p=1), LpNorm(jmod)^2, LpNorm(glmod, p=1), LpNorm(glmod)^2), nrow=2, dimnames=list(c("L1","L2"),c("JMod","glm")))
 ```
 
 Clear win for JMod; bias is only $-0.104$.
@@ -141,13 +142,13 @@ Clear win for JMod; bias is only $-0.104$.
 ## Oral stage
 # Residuals
 jmod.4 <- JMod(curr.stage=4, curr.dt=mdat$Oral.Dt, expected.dt=mdat$Expected.Dt)
-jmod <- na.omit(JMod.err(probs=jmod.4$prob, truth=mdat$FY.Oral.Book))
-glmod <- JMod.err(probs=glm.ora.1$fitted, truth=model.frame(glm.ora.1)[,1])
+jmod <- na.omit(JModError(probs=jmod.4$prob, truth=mdat$FY.Oral.Book))
+glmod <- JModError(probs=glm.ora.1$fitted, truth=model.frame(glm.ora.1)[,1])
 # Combined residuals
 ggdat <- data.frame(jmod, glm=glmod, closed=na.omit(mdat$FY.Oral.Book))
 ggplot(ggdat, aes(x=glm, y=jmod, color=closed)) + geom_point() + geom_hline(yintercept=mean(jmod), alpha=.3) + geom_vline(xintercept=mean(glmod), alpha=.3) + labs(title="Oral JMod versus glm residual error and bias") + xlim(c(-1,1)) + ylim(c(-1,1))
 # Metrics
-matrix(c(lpnorm(jmod, p=1), lpnorm(jmod)^2, lpnorm(glmod, p=1), lpnorm(glmod)^2), nrow=2, dimnames=list(c("L1","L2"),c("JMod","glm")))
+matrix(c(LpNorm(jmod, p=1), LpNorm(jmod)^2, LpNorm(glmod, p=1), LpNorm(glmod)^2), nrow=2, dimnames=list(c("L1","L2"),c("JMod","glm")))
 ```
 
 JMod bias is $0.047$.
@@ -159,9 +160,9 @@ One more idea for model comparison: why not look at the classification tables di
 ```{r, message=F, warning=F, cache=F}
 ## Confusion matrix summing probabilities, rather than counting classifications
 # GLM for plan stage
-confusion.wtd(preds=fitted(glm.pln.1), truth=model.frame(glm.pln.1)[,1], dimnames=c("truth","pred"))
+ConfusionMatrixWeighted(preds=fitted(glm.pln.1), truth=model.frame(glm.pln.1)[,1], dimnames=c("truth","pred"))
 # JMod for plan stage
-confusion.wtd(preds=jmod.1$prob, truth=mdat$FY.Plan.Book, dimnames=c("truth","pred"))
+ConfusionMatrixWeighted(preds=jmod.1$prob, truth=mdat$FY.Plan.Book, dimnames=c("truth","pred"))
 ```
 
 Note that the antidiagonal terms sum to the corresponding $L_{1}$ norm, from the "Plan JMod versus glm residual error and bias" table above.
@@ -170,27 +171,27 @@ Planned solicitations -- while the glm is well balanced, JMod overwhelmingly cla
 
 ```{r, message=F, warning=F, cache=F}
 # GLM for clear stage
-confusion.wtd(preds=fitted(glm.clr.1), truth=model.frame(glm.clr.1)[,1], dimnames=c("truth","pred"))
+ConfusionMatrixWeighted(preds=fitted(glm.clr.1), truth=model.frame(glm.clr.1)[,1], dimnames=c("truth","pred"))
 # JMod for clear stage
-confusion.wtd(preds=na.omit(jmod.2$prob), truth=na.omit(mdat$FY.Clear.Book), dimnames=c("truth","pred"))
+ConfusionMatrixWeighted(preds=na.omit(jmod.2$prob), truth=na.omit(mdat$FY.Clear.Book), dimnames=c("truth","pred"))
 ```
 
 Same story -- for cleared solicitations JMod overwhelmingly categorizes them as unlikely to close.
 
 ```{r, message=F, warning=F, cache=F}
 # GLM for ask stage
-confusion.wtd(preds=fitted(glm.ask.1), truth=model.frame(glm.ask.1)[,1], dimnames=c("truth","pred"))
+ConfusionMatrixWeighted(preds=fitted(glm.ask.1), truth=model.frame(glm.ask.1)[,1], dimnames=c("truth","pred"))
 # JMod for ask stage
-confusion.wtd(preds=na.omit(jmod.3$prob), truth=na.omit(mdat$FY.Ask.Book), dimnames=c("truth","pred"))
+ConfusionMatrixWeighted(preds=na.omit(jmod.3$prob), truth=na.omit(mdat$FY.Ask.Book), dimnames=c("truth","pred"))
 ```
 
 Same story for asked, but look how much better JMod does in the True-True quadrant, bottom right.
 
 ```{r, message=F, warning=F, cache=F}
 # GLM for oral stage
-confusion.wtd(preds=fitted(glm.ora.1), truth=model.frame(glm.ora.1)[,1], dimnames=c("truth","pred"))
+ConfusionMatrixWeighted(preds=fitted(glm.ora.1), truth=model.frame(glm.ora.1)[,1], dimnames=c("truth","pred"))
 # JMod for oral stage
-confusion.wtd(preds=na.omit(jmod.4$prob), truth=na.omit(mdat$FY.Oral.Book), dimnames=c("truth","pred"))
+ConfusionMatrixWeighted(preds=na.omit(jmod.4$prob), truth=na.omit(mdat$FY.Oral.Book), dimnames=c("truth","pred"))
 ```
 
 Oral is different; JMod does better in every quadrant. In particular, False-False in the top left is about twice as good as glm. Under JMod, an oral pledge is only ever assigned $p=0$ when it is scheduled to be closed in a future fiscal year.
@@ -208,17 +209,17 @@ Potentially interesting derived variables include the **number of days left in t
 Some other thoughts.
 
 1. Is logistic regression really suitable (overdispersion)?
-2. Should it be restricted to MG-range gifts, $[\text{$}25\text{k},\text{$}5\text{M})$?
+2. Should it be restricted to MG-range gifts, $[\$25\text{k},\$5\text{M})$?
 3. What nonparametric methods are worth trying?
 
 First, let's create those derived variables.
 
 ```{r, message=F, warning=F, cache=F}
-## Derived variables
-
+#### Derived variables ----
+source("Rscript1b - derived variables.R")
 ```
 
-* <Insert GitHub link>
+* [Rscript1b - derived variables.R](https://github.com/phively/gsb-sols-proj/blob/master/Rscript1b%20-%20derived%20variables.R)
 
 Think about #3 first. I'm a fan of classification trees, and that general method is the closest to the existing approach. It would also be interesting to see which of the proposed variables end up being chosen.
 

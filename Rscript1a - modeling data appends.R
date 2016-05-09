@@ -13,10 +13,10 @@ mdat <- mdat %>% filter(as.numeric(substr(Final.Sol.Stage,1,2)) >= 10 & Expected
          oral2actual = as.numeric(difftime(Actual.Dt, Oral.Dt, units="days"))) %>%
   filter(plan2actual>0) %>%
   # Determine the EOFY at the start of each stage
-  mutate(planFYE = fye(Planning.Dt),
-         clearFYE = fye(Clear.Dt),
-         askFYE = fye(Ask.Dt),
-         oralFYE = fye(Oral.Dt),
+  mutate(planFYE = FYE(Planning.Dt),
+         clearFYE = FYE(Clear.Dt),
+         askFYE = FYE(Ask.Dt),
+         oralFYE = FYE(Oral.Dt),
          # Did the solicitation close in the same FY as the stage
          FY.plan = Actual.Dt <= planFYE,
          FY.clear = Actual.Dt <= clearFYE,

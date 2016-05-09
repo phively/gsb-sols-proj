@@ -159,10 +159,10 @@ This is fascinating; a solicitation entering plan or clear in January or plan in
 ```{r, echo=F, warning=F, cache=F}
 ## Redo previous plots for each fiscal year
 tmp <- mdat %>% select(Planning.Dt, Clear.Dt, Ask.Dt, Oral.Dt, Booked) %>%
-  mutate(Count=1, PlanY=YtoFY(Planning.Dt), Plan=as.numeric(month(Planning.Dt)),
-         ClearY=YtoFY(Clear.Dt), Clear=as.numeric(month(Clear.Dt)),
-         AskY=YtoFY(Ask.Dt), Ask=as.numeric(month(Ask.Dt)),
-         OralY=YtoFY(Oral.Dt), Oral=as.numeric(month(Oral.Dt))) %>%
+  mutate(Count=1, PlanY=YToFY(Planning.Dt), Plan=as.numeric(month(Planning.Dt)),
+         ClearY=YToFY(Clear.Dt), Clear=as.numeric(month(Clear.Dt)),
+         AskY=YToFY(Ask.Dt), Ask=as.numeric(month(Ask.Dt)),
+         OralY=YToFY(Oral.Dt), Oral=as.numeric(month(Oral.Dt))) %>%
   select(-c(1:4)) #Drop actual dates which are now unneeded
 # Spread month and year
 tmp2 <- gather(tmp, "Stage", "Month", seq(4,10,by=2)) %>% gather("StageY", "Year", 3:6) %>%

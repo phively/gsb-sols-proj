@@ -4,10 +4,10 @@
 
 Joe.dat <- read.csv("2016-03-21 Booth solicitation history.csv", header=T, stringsAsFactors=F) %>%
   filter(Joe.Sol==1)
-Joe.dat <- toDate(Joe.dat, c("Current.Solicitation.Stage.Date","Planned.Ask.Dt","Solicit.Dt.Added",
+Joe.dat <- ToDate(Joe.dat, c("Current.Solicitation.Stage.Date","Planned.Ask.Dt","Solicit.Dt.Added",
                              "Ask.Dt","Expected.Dt","Actual.Dt","Solicit.Start.Dt","Most.Recent.Planning",
                              "Most.Recent.Clearance","Most.Recent.Oral.Pledge","Solicit.Stop.Dt"))
-Joe.dat <- toNumeric(Joe.dat, c("Aggregate.Planned.Ask.Amt", "Aggregate.Ask.Amt", "Aggregate.Expected.Amt",
+Joe.dat <- ToNumeric(Joe.dat, c("Aggregate.Planned.Ask.Amt", "Aggregate.Ask.Amt", "Aggregate.Expected.Amt",
                                 "Aggregate.Actual.Amt"))
 
 ## Clean up stage dates based on what's available

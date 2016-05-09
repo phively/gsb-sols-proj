@@ -9,6 +9,6 @@
 *.html
 *.xls
 *.xlsx
+*.md
 .Rproj.user
-README.md
 Git Bash.lnk
