@@ -228,42 +228,39 @@ Try the random forest approach to select variables. First split up the variables
 ```{r, message=F, warning=F, cache=F}
 ## Identify which dependent variables contain information specific to the various stages
 ## Obviously shouldn't include after-the-fact information (FY. objects, actual amount, etc.)
-head.all <- names(mderived)[names(mderived) %in% c("Solicitation.Type.Desc", "Final.Sol.Mgr", "Planned.Fiscal.Mo", "Planned.Amt", "Expected.Fiscal.Mo", "Expected.Amt", "Planned.Ask.Band")]
+head.all <- names(mderived)[names(mderived) %in% c("Solicitation.Type.Desc", "Planned.Fiscal.Mo", "Planned.Amt", "Expected.Fiscal.Mo", "Expected.Amt", "Planned.Ask.Band")]
 # Look for "plan" and "Plan" in header ([pP] = both cases), but ignore the FY. outcome objects
 head.plan <- names(mderived)[setdiff(grep("[pP]lan", names(mderived)), grep("FY.", names(mderived)))]
-head.plan <- setdiff(head.plan, "plan2clear") #take plan2clear which wouldn't have been known
+head.plan <- setdiff(head.plan, c(head.all, "plan2clear")) #take plan2clear which wouldn't have been known
 # Look for "Clear" in header
 head.clear <- names(mderived)[setdiff(grep("[cC]lear", names(mderived)), grep("FY.", names(mderived)))]
-head.clear <- setdiff(head.clear, "clear2ask") #take out clear2ask which wouldn't have been known
+head.clear <- setdiff(head.clear, c(head.all, "clear2ask")) #take out clear2ask which wouldn't have been known
 # Look for "Ask" in header
 head.ask <- names(mderived)[setdiff(grep("[aA]sk", names(mderived)), grep("FY.", names(mderived)))]
-head.ask <- setdiff(head.ask, "ask2oral") #take out ask2oral which wouldn't have been known
+head.ask <- setdiff(head.ask, c(head.all, "ask2oral")) #take out ask2oral which wouldn't have been known
 head.ask <- c(head.ask, "plan2clear") #add fields that would have been known
 # Look for "Oral" in header
 head.oral <- names(mderived)[setdiff(grep("[oO]ral", names(mderived)), grep("FY.", names(mderived)))]
+head.oral <- setdiff(head.oral, head.all)
 head.oral <- c(head.oral, "plan2clear", "clear2ask", "Ask.Amt", "Ask.Band", "Ask.Amt.Over.Pln.Amt", "Ask.Amt.Over.Pln.Fac") #add fields that would've been known
 ```
 
 Now grow a random forest for each stage.
 
 ```{r, message=F, warning=F, cache=F}
-library(randomForest)
+library(party)
 # Planned stage forest
 treedat <- na.omit(mderived[,c("FY.Plan.Book", head.all, head.plan)])
-treedat$FY.Plan.Book <- as.factor(treedat$FY.Plan.Book)
-rf.plan <- randomForest(x=treedat[,-1], y=treedat[,1])
+rf.plan <- cforest(FY.Plan.Book ~ ., data=treedat)
 # Clear stage forest
 treedat <- na.omit(mderived[,c("FY.Clear.Book", head.all, head.clear)])
-treedat$FY.Clear.Book <- as.factor(treedat$FY.Clear.Book)
-rf.clear <- randomForest(x=treedat[,-1], y=treedat[,1])
+rf.clear <- cforest(FY.Clear.Book ~ ., data=treedat)
 # Ask stage forest
 treedat <- na.omit(mderived[,c("FY.Ask.Book", head.all, head.ask)])
-treedat$FY.Ask.Book <- as.factor(treedat$FY.Ask.Book)
-rf.ask <- randomForest(x=treedat[,-1], y=treedat[,1])
+rf.ask <- cforest(FY.Ask.Book ~ ., data=treedat)
 # Oral stage forest
 treedat <- na.omit(mderived[,c("FY.Oral.Book", head.all, head.oral)])
-treedat$FY.Oral.Book <- as.factor(treedat$FY.Oral.Book)
-rf.oral <- randomForest(x=treedat[,-1], y=treedat[,1])
+rf.oral <- cforest(FY.Oral.Book ~ ., data=treedat)
 ```
 
 
