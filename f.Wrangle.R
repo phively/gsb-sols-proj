@@ -53,3 +53,10 @@ FYE <- function(date) {
     )
   )
 }
+
+#### Converts month number to fiscal month number ----
+MoToFiscalMo <- function(month.number, start.month=7) {
+# Default fiscal year start is July (7)
+  return((month.number - start.month) %% 12 + 1)
+  # %% is the modulo operator in R
+}

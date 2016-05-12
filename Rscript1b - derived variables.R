@@ -5,8 +5,17 @@ source("Rscript1a - modeling data appends.R")
 #### Derived variables ----
 
 mderived <- mdat %>% mutate(
+  # Character to factor
+  Solicitation.Type.Desc = factor(Solicitation.Type.Desc),
+  Final.Sol.Mgr = factor(Final.Sol.Mgr),
   # Ask and planned ask giving amounts
-  Ask.Amt.Over.Planned.Amt = Ask.Amt/Planned.Amt,
+  Ask.Amt.Over.Pln.Amt = Ask.Amt/Planned.Amt,
+  Ask.Amt.Over.Pln.Fac = factor(
+    ifelse(Ask.Amt.Over.Pln.Amt < 1, "Down",
+    ifelse(Ask.Amt.Over.Pln.Amt == 1, "Same",
+    ifelse(Ask.Amt.Over.Pln.Amt > 1, "Up",
+    NA)))
+  ),
   Ask.Band = factor(
     ifelse(Ask.Amt>=5000000, "PG",
     ifelse(Ask.Amt>=25000, "MG",
@@ -36,7 +45,35 @@ mderived <- mdat %>% mutate(
 	plan2expect = as.numeric(difftime(Expected.Dt, Planning.Dt, units="days")),
 	clear2expect = as.numeric(difftime(Expected.Dt, Clear.Dt, units="days")),
 	ask2expect = as.numeric(difftime(Expected.Dt, Ask.Dt, units="days")),
-	oral2expect = as.numeric(difftime(Expected.Dt, Oral.Dt, units="days"))
+	oral2expect = as.numeric(difftime(Expected.Dt, Oral.Dt, units="days")),
+	# Month of milestones, transformed so July is month 1
+	Planned.Fiscal.Mo = MoToFiscalMo(month(Planned.Dt)),
+	Expected.Fiscal.Mo = MoToFiscalMo(month(Expected.Dt)),
+	planning.fiscal.mo = MoToFiscalMo(month(Planning.Dt)),
+	clear.fiscal.mo = MoToFiscalMo(month(Clear.Dt)),
+	ask.fiscal.mo = MoToFiscalMo(month(Ask.Dt)),
+	oral.fiscal.mo = MoToFiscalMo(month(Oral.Dt)),
+	actual.fiscal.mo = MoToFiscalMo(month(Actual.Dt)),
+	# Remove variables not needed for modeling or ID
+	Final.Sol.Stage.Dt = NULL,
+	Final.Sol.Stage = NULL,
+	Booked = NULL,
+	Solicit.Dt.Added = NULL,
+	Planned.Dt = NULL,
+	Expected.Dt = NULL,
+	Planning.Dt = NULL,
+	Clear.Dt = NULL,
+	Ask.Dt = NULL,
+	Oral.Dt = NULL,
+	Actual.Dt = NULL,
+	plan2actual = NULL,
+	clear2actual = NULL,
+	ask2actual = NULL,
+	oral2actual=NULL,
+	FY.plan = NULL,
+	FY.clear = NULL,
+	FY.ask = NULL,
+	FY.oral = NULL	
 )
 		
 #### Save data to disk ----
