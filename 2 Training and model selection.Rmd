@@ -248,22 +248,54 @@ head.oral <- c(head.oral, "plan2clear", "clear2ask", "Ask.Amt", "Ask.Band", "Ask
 Now grow a random forest for each stage.
 
 ```{r, message=F, warning=F, cache=F}
-library(party)
+library(randomForest)
 # Planned stage forest
 treedat <- na.omit(mderived[,c("FY.Plan.Book", head.all, head.plan)])
-rf.plan <- cforest(FY.Plan.Book ~ ., data=treedat)
+rf.plan <- randomForest(factor(FY.Plan.Book) ~ ., data=treedat, importance=T)
 # Clear stage forest
 treedat <- na.omit(mderived[,c("FY.Clear.Book", head.all, head.clear)])
-rf.clear <- cforest(FY.Clear.Book ~ ., data=treedat)
+rf.clear <- randomForest(factor(FY.Clear.Book) ~ ., data=treedat, importance=T)
 # Ask stage forest
 treedat <- na.omit(mderived[,c("FY.Ask.Book", head.all, head.ask)])
-rf.ask <- cforest(FY.Ask.Book ~ ., data=treedat)
+rf.ask <- randomForest(factor(FY.Ask.Book) ~ ., data=treedat, importance=T)
 # Oral stage forest
 treedat <- na.omit(mderived[,c("FY.Oral.Book", head.all, head.oral)])
-rf.oral <- cforest(FY.Oral.Book ~ ., data=treedat)
+rf.oral <- randomForest(factor(FY.Oral.Book) ~ ., data=treedat, importance=T)
 ```
 
+The green lines are the out-of-bag error (similar to cross-validation). For comparison, I've included the error rates for the initial logistic regression, above. (Note that `PlotForest()` is included in [f.Diagnostics.R](https://github.com/phively/gsb-sols-proj/blob/master/f.Diagnostics.R).)
 
+```{r, message=F, warning=F, cache=F}
+# Put together the confusion matrices again
+confuse <- ConfusionMatrix(list(glm.pln.1, glm.clr.1, glm.ask.1, glm.ora.1), modnames=modnames, counts=F)
+PlotForest(rf.plan, title="Plan")
+# First logistic regression Plan error
+confuse[["Plan"]]["FALSE","TRUE"] + confuse[["Plan"]]["TRUE","FALSE"]
+PlotForest(rf.clear, title="Clear")
+# First logistic regression Clear error
+confuse[["Clear"]]["FALSE","TRUE"] + confuse[["Clear"]]["TRUE","FALSE"]
+PlotForest(rf.ask, title="Ask")
+# First logistic regression Ask error
+confuse[["Ask"]]["FALSE","TRUE"] + confuse[["Ask"]]["TRUE","FALSE"]
+PlotForest(rf.oral, title="Oral")
+# First logistic regression Oral error; no True-False
+tryCatch(confuse[["Oral"]]["FALSE","TRUE"] + confuse[["Oral"]]["TRUE","FALSE"], error=function(.) print(confuse[["Oral"]]["FALSE","TRUE"]))
+```
+
+Note the much lower error in every single case. The random forests are definitely doing something right. Which variables do they find the most helpful?
+
+```{r, echo=F, message=F, warning=F, cache=F}
+## Coerce importances into a data frame
+imp.plan <- importance(rf.plan, scale=F, type=1)
+imp.clear <- importance(rf.clear, scale=F, type=1)
+imp.ask <- importance(rf.ask, scale=F, type=1)
+imp.oral <- importance(rf.oral, scale=F, type=1)
+rf.importances <- rbind(data.frame(Model="Plan", imp.plan, Variable=rownames(imp.plan)), data.frame(Model="Clear", imp.clear, Variable=rownames(imp.clear)), data.frame(Model="Ask", imp.ask, Variable=rownames(imp.ask)), data.frame(Model="Oral", imp.oral, Variable=rownames(imp.oral)), make.row.names=F)
+## Plot importances
+ggplot(rf.importances, aes(x=Variable, y=MeanDecreaseAccuracy, color=Model, group=Model)) + geom_point() + geom_line() + theme(axis.text.x=element_text(angle=90, hjust=1)) + labs(title="Variable selection", y="Mean Decrease in Accuracy")
+```
+
+The `Stage.Future`, `stage2EOFY` and `stage2expect` variables are too correlated
 
 # Packages used
 ```{r}
