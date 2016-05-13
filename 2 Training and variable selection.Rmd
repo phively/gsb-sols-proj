@@ -5,7 +5,7 @@ date: "April 14, 2016"
 output: html_document
 ---
 
-Source can be viewed [on GitHub](https://github.com/phively/gsb-sols-proj/blob/master/2%20Training%20and%20model%20selection.Rmd)
+Source can be viewed [on GitHub](https://github.com/phively/gsb-sols-proj/blob/master/2%20Training%20and%20variable%20selection.Rmd)
 
 # Logistic modeling
 
