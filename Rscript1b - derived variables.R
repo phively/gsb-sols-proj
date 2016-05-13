@@ -17,15 +17,15 @@ mderived <- mdat %>% mutate(
     NA)))
   ),
   Ask.Band = factor(
-    ifelse(Ask.Amt>=5000000, "PG",
-    ifelse(Ask.Amt>=25000, "MG",
-    ifelse(Ask.Amt>0, "AF",
+    ifelse(Ask.Amt >= 5000000, "PG",
+    ifelse(Ask.Amt >= 25000, "MG",
+    ifelse(Ask.Amt > 0, "AF",
     NA)))
   ),
   Planned.Ask.Band = factor(
-    ifelse(Planned.Amt>=5000000, "PG",
-    ifelse(Planned.Amt>=25000, "MG",
-    ifelse(Planned.Amt>0, "AF",
+    ifelse(Planned.Amt >= 5000000, "PG",
+    ifelse(Planned.Amt >= 25000, "MG",
+    ifelse(Planned.Amt > 0, "AF",
     NA)))
   ),
   # Boolean indicators - is the expected date in a different fiscal year?

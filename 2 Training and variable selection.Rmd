@@ -1,5 +1,5 @@
 ---
-title: "2 Training and Model Selection"
+title: "2 Training and Variable Selection"
 author: "Paul Hively"
 date: "April 14, 2016"
 output: html_document
@@ -295,7 +295,7 @@ rf.importances <- rbind(data.frame(Model="Plan", imp.plan, Variable=rownames(imp
 ggplot(rf.importances, aes(x=Variable, y=MeanDecreaseAccuracy, color=Model, group=Model)) + geom_point() + geom_line() + theme(axis.text.x=element_text(angle=90, hjust=1)) + labs(title="Variable selection", y="Mean Decrease in Accuracy")
 ```
 
-The `Stage.Future`, `stage2EOFY` and `stage2expect` variables are too correlated
+The `Stage.Future`, `stage2EOFY` and `stage2expect` variables are correlated. Due to the construction of 
 
 # Packages used
 ```{r}
