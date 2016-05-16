@@ -62,6 +62,8 @@ kable(CompareDeviances(models=list(glm.pln.1, glm.clr.1, glm.ask.1, glm.ora.1), 
 
 Month-by-month coefficients result in an unambiguously better model compared to just an intercept per stage.
 
+Why four separate models rather than a factor for stage? Note that the goal is to determine whether hitting a certain stage results in a solicitation closing *that fiscal year*; the target $Y$ changes from stage to stage, so the model needs to change as well.
+
 JMod has the following structure. Cell entries are probability to close given that a solicitation is in the indicated stage and month, with an expected close date that fiscal year:
 
 | Stage  | July-Feb| Mar-Apr |   May   |  June   |
@@ -160,38 +162,38 @@ One more idea for model comparison: why not look at the classification tables di
 ```{r, message=F, warning=F, cache=F}
 ## Confusion matrix summing probabilities, rather than counting classifications
 # GLM for plan stage
-ConfusionMatrixWeighted(preds=fitted(glm.pln.1), truth=model.frame(glm.pln.1)[,1], dimnames=c("truth","pred"))
+ConfusionMatrixWeighted(preds=fitted(glm.pln.1), truth=model.frame(glm.pln.1)[,1], dimnames=c("truth", "pred"))
 # JMod for plan stage
-(jmod.1$errtable <- ConfusionMatrixWeighted(preds=jmod.1$prob, truth=mdat$FY.Plan.Book, dimnames=c("truth","pred")))
+(jmod.1$errtable <- ConfusionMatrixWeighted(preds=jmod.1$prob, truth=mdat$FY.Plan.Book, dimnames=c("truth", "pred")))
 ```
 
 Note that the antidiagonal terms sum to the corresponding $L_{1}$ norm, from the "Plan JMod versus glm residual error and bias" table above.
 
-Planned solicitations -- while the glm is well balanced, JMod overwhelmingly classifies planned solicitations as unlikely to come in. This could be because *JMod is tuned toward directly predicting ask amounts*, and uses its weights to discount MG rather than worrying about the close probability of every AF gift.
+Planned solicitations -- while the glm is well balanced, JMod overwhelmingly classifies planned solicitations as unlikely to come in. This could be because *JMod is tuned toward directly predicting actual amounts*, and uses its weights to discount MG rather than worrying about the close probability of every AF gift.
 
 ```{r, message=F, warning=F, cache=F}
 # GLM for clear stage
-ConfusionMatrixWeighted(preds=fitted(glm.clr.1), truth=model.frame(glm.clr.1)[,1], dimnames=c("truth","pred"))
+ConfusionMatrixWeighted(preds=fitted(glm.clr.1), truth=model.frame(glm.clr.1)[,1], dimnames=c("truth", "pred"))
 # JMod for clear stage
-(jmod.2$errtable <- ConfusionMatrixWeighted(preds=na.omit(jmod.2$prob), truth=na.omit(mdat$FY.Clear.Book), dimnames=c("truth","pred")))
+(jmod.2$errtable <- ConfusionMatrixWeighted(preds=na.omit(jmod.2$prob), truth=na.omit(mdat$FY.Clear.Book), dimnames=c("truth", "pred")))
 ```
 
 Same story -- for cleared solicitations JMod overwhelmingly categorizes them as unlikely to close.
 
 ```{r, message=F, warning=F, cache=F}
 # GLM for ask stage
-ConfusionMatrixWeighted(preds=fitted(glm.ask.1), truth=model.frame(glm.ask.1)[,1], dimnames=c("truth","pred"))
+ConfusionMatrixWeighted(preds=fitted(glm.ask.1), truth=model.frame(glm.ask.1)[,1], dimnames=c("truth", "pred"))
 # JMod for ask stage
-(jmod.3$errtable <- ConfusionMatrixWeighted(preds=na.omit(jmod.3$prob), truth=na.omit(mdat$FY.Ask.Book), dimnames=c("truth","pred")))
+(jmod.3$errtable <- ConfusionMatrixWeighted(preds=na.omit(jmod.3$prob), truth=na.omit(mdat$FY.Ask.Book), dimnames=c("truth", "pred")))
 ```
 
 Same story for asked, but look how much better JMod does in the True-True quadrant, bottom right.
 
 ```{r, message=F, warning=F, cache=F}
 # GLM for oral stage
-ConfusionMatrixWeighted(preds=fitted(glm.ora.1), truth=model.frame(glm.ora.1)[,1], dimnames=c("truth","pred"))
+ConfusionMatrixWeighted(preds=fitted(glm.ora.1), truth=model.frame(glm.ora.1)[,1], dimnames=c("truth", "pred"))
 # JMod for oral stage
-(jmod.4$errtable <- ConfusionMatrixWeighted(preds=na.omit(jmod.4$prob), truth=na.omit(mdat$FY.Oral.Book), dimnames=c("truth","pred")))
+(jmod.4$errtable <- ConfusionMatrixWeighted(preds=na.omit(jmod.4$prob), truth=na.omit(mdat$FY.Oral.Book), dimnames=c("truth", "pred")))
 ```
 
 Oral is different; JMod does better in every quadrant. In particular, False-False in the top left is about twice as good as glm. Under JMod, an oral pledge is only ever assigned $p=0$ when it is scheduled to be closed in a future fiscal year.
@@ -231,7 +233,7 @@ Try the random forest approach to select variables. First split up the variables
 head.all <- names(mderived)[names(mderived) %in% c("Solicitation.Type.Desc", "Planned.Fiscal.Mo", "Planned.Amt", "Expected.Fiscal.Mo", "Expected.Amt", "Planned.Ask.Band")]
 # Look for "plan" and "Plan" in header ([pP] = both cases), but ignore the FY. outcome objects
 head.plan <- names(mderived)[setdiff(grep("[pP]lan", names(mderived)), grep("FY.", names(mderived)))]
-head.plan <- setdiff(head.plan, c(head.all, "plan2clear")) #take plan2clear which wouldn't have been known
+head.plan <- setdiff(head.plan, c(head.all, "plan2clear")) #take out plan2clear which wouldn't have been known
 # Look for "Clear" in header
 head.clear <- names(mderived)[setdiff(grep("[cC]lear", names(mderived)), grep("FY.", names(mderived)))]
 head.clear <- setdiff(head.clear, c(head.all, "clear2ask")) #take out clear2ask which wouldn't have been known
@@ -264,7 +266,7 @@ treedat <- na.omit(mderived[,c("FY.Oral.Book", head.all, head.oral)])
 rf.oral <- randomForest(factor(FY.Oral.Book) ~ ., data=treedat, importance=T)
 ```
 
-The green lines are the out-of-bag error (similar to cross-validation). For comparison, I've included the error rates for the initial logistic regression, above. (Note that `PlotForest()` is included in [f.Diagnostics.R](https://github.com/phively/gsb-sols-proj/blob/master/f.Diagnostics.R).)
+The green lines are the out-of-bag error (similar to cross-validation). (Note that `PlotForest()` is included in [f.Diagnostics.R](https://github.com/phively/gsb-sols-proj/blob/master/f.Diagnostics.R).)
 
 ```{r, message=F, warning=F, cache=F}
 PlotForest(rf.plan, title="Plan")
@@ -273,7 +275,7 @@ PlotForest(rf.ask, title="Ask")
 PlotForest(rf.oral, title="Oral")
 ```
 
-Finally, the GLM errors (from the confusion matrix, threshold $p=0.5$) versus the JMod errors (from the weighted confusion matrix, $1-\sum_{i=1}^{n}\frac{\mathbf{1}\{x_{i}\text{ misclassified}\}}{n}$) versus the out-of-bag decision forest errors:
+Finally, the GLM errors from the confusion matrix, threshold $p=0.5$, versus the JMod errors from the weighted confusion matrix, $\frac{1}{n}\sum_{i=1}^{n}\mathbf{1}\{x_{i}\text{ misclassified}\}$, versus the out-of-bag decision forest errors:
 
 ```{r, echo=F, message=F, warning=F, cache=F}
 # Put together the confusion matrices again
@@ -289,7 +291,7 @@ errors <- rbind(dat1, dat2, dat3)
 kable(errors, digits=2)
 ```
 
-Note the great out-of-bag error rates across the board. The random forests are definitely doing something right. Which variables do they find the most helpful?
+Great out-of-bag error rates across the board. The random forests are definitely doing something right. Which variables do they find the most helpful?
 
 ```{r, echo=F, message=F, warning=F, cache=F}
 ## Coerce importances into a data frame
@@ -301,16 +303,18 @@ rf.importances <- rbind(data.frame(Model="Plan", imp.plan, Variable=rownames(imp
 ## Plot importances
 # y axis will end at nearest .02 above the maximum in the data
 top <- ceiling(max(rf.importances$MeanDecreaseAccuracy)*50)/50
-ggplot(rf.importances, aes(x=Variable, y=MeanDecreaseAccuracy, color=Model, group=Model)) + geom_point() + geom_line() + theme(axis.text.x=element_text(angle=90, hjust=1)) + labs(title="Variable selection", y="Mean Decrease in Accuracy") + scale_y_continuous(breaks=seq(0, top, by=.02))
+ggplot(rf.importances, aes(x=Variable, y=MeanDecreaseAccuracy, color=Model, group=Model)) + geom_point() + geom_line() + theme(axis.text.x=element_text(angle=90, hjust=1)) + labs(title="Variable importances", y="Mean Decrease in Accuracy") + scale_y_continuous(breaks=seq(0, top, by=.02))
 ```
 
-* The `Stage.Future`, `stage2EOFY`, `stage.fiscal.mo`, and `stage2expect` variables are correlated. Because of how the forests are constructed (random branching) that means they all show up as fairly important.
+* The `Stage.Future`, `stage2EOFY`, `stage.fiscal.mo`, and `stage2expect` variables show up as a distinctive double peak pattern per stage. Note that they are all correlated -- because of how the forests are constructed (random branching) that means they all show up as fairly important.
 * Out of the four of them I would personally ditch `stage2EOFY` and consider dropping one of the `stage.fiscal.mo` or `stage2expect` variables as well.
 * `Expected.Amt` and `Planned.Amt` are good predictors before the Oral stage; `Planned.Ask.Band` is worse across the board.
 * `Expected.Fiscal.Mo` is important across the board, while `Planned.Fiscal.Mo` is useful before the Oral stage.
 * Similarly, `Solicitation.Type.Desc` is a decent predictor before 
 * The various times between stages e.g. `plan2clear` are not good predictors.
 * `Ask.Amt` is a good predictor in the Ask stage, certainly much better than `Ask.Band`; the two `Ask.Amt.Over.` fractions are useless.
+
+Re-fit the random forests, cutting out the clearly unimportant variables.
 
 ```{r, message=F, warning=F, cache=F}
 ## Update the explanatory variables
@@ -390,25 +394,25 @@ errors <- rbind(errors, data.frame(Model="Random forest 3", Plan=tail(rf.plan$er
 kable(errors, digits=2)
 ```
 
-Pretty much the same as the other forest methods, so I prefer the more parsimonious model. Finally, how do random forests compare to JMod when given the same amount of information?
+Pretty much the same as the other forest methods, so I prefer this last Random forest 3 as the more parsimonious model. Finally, how do random forests compare to JMod when given the same amount of information?
 
 ```{r, message=F, warning=F, cache=F}
 ## Regrow the random forests
 set.seed(30635)
 # Planned stage forest
 treedat <- na.omit(mderived[,c("FY.Plan.Book", "planning.fiscal.mo", "plan2EOFY")])
-rf.plan <- randomForest(factor(FY.Plan.Book) ~ ., data=treedat, importance=T)
+rf.plan.jm <- randomForest(factor(FY.Plan.Book) ~ ., data=treedat, importance=T)
 # Clear stage forest
 treedat <- na.omit(mderived[,c("FY.Clear.Book", "clear.fiscal.mo", "clear2EOFY")])
-rf.clear <- randomForest(factor(FY.Clear.Book) ~ ., data=treedat, importance=T)
+rf.clear.jm <- randomForest(factor(FY.Clear.Book) ~ ., data=treedat, importance=T)
 # Ask stage forest
 treedat <- na.omit(mderived[,c("FY.Ask.Book", "ask.fiscal.mo", "ask2EOFY")])
-rf.ask <- randomForest(factor(FY.Ask.Book) ~ ., data=treedat, importance=T)
+rf.ask.jm <- randomForest(factor(FY.Ask.Book) ~ ., data=treedat, importance=T)
 # Oral stage forest
 treedat <- na.omit(mderived[,c("FY.Oral.Book", "oral.fiscal.mo", "oral2EOFY")])
-rf.oral <- randomForest(factor(FY.Oral.Book) ~ ., data=treedat, importance=T)
+rf.oral.jm <- randomForest(factor(FY.Oral.Book) ~ ., data=treedat, importance=T)
 ## randomForest errors
-errors <- rbind(errors, data.frame(Model="Random forest, JMod fields only", Plan=tail(rf.plan$err.rate[,"OOB"],1), Clear=tail(rf.clear$err.rate[,"OOB"],1), Ask=tail(rf.ask$err.rate[,"OOB"],1), Oral=tail(rf.oral$err.rate[,"OOB"],1), stringsAsFactors=F))
+errors <- rbind(errors, data.frame(Model="Random forest, JMod fields only", Plan=tail(rf.plan.jm$err.rate[,"OOB"],1), Clear=tail(rf.clear.jm$err.rate[,"OOB"],1), Ask=tail(rf.ask.jm$err.rate[,"OOB"],1), Oral=tail(rf.oral.jm$err.rate[,"OOB"],1), stringsAsFactors=F))
 ## error table
 kable(errors, digits=2)
 ```
@@ -437,6 +441,27 @@ c(head.all, head.ask)
 
 ```{r, echo=F, message=F, warning=F, cache=F}
 c(head.all, head.oral)
+```
+
+We see the following are consistently important:
+
+* `Solicitation.Type.Desc`, `Planned.Amt`, and `Expected.Amt` are useful across the board
+* `Stage.Future` and `stage.fiscal.mo` for the corresponding stages are useful
+* `Ask.Amt` is useful in the ask and oral stages
+
+`Stage.Future` and `stage.fiscal.mo` are both used by JMod so this introduces three new predictors useful for assessing a solicitation's probability to be booked in a given year (plus `Ask.Amt` for the last two stages).
+
+```{r, echo=F, message=F, warning=F, cache=F}
+## Coerce importances into a data frame
+imp.plan <- importance(rf.plan, scale=F, type=1)
+imp.clear <- importance(rf.clear, scale=F, type=1)
+imp.ask <- importance(rf.ask, scale=F, type=1)
+imp.oral <- importance(rf.oral, scale=F, type=1)
+rf.importances <- rbind(data.frame(Model="Plan", imp.plan, Variable=rownames(imp.plan)), data.frame(Model="Clear", imp.clear, Variable=rownames(imp.clear)), data.frame(Model="Ask", imp.ask, Variable=rownames(imp.ask)), data.frame(Model="Oral", imp.oral, Variable=rownames(imp.oral)), make.row.names=F)
+## Plot importances
+# y axis will end at nearest .02 above the maximum in the data
+top <- ceiling(max(rf.importances$MeanDecreaseAccuracy)*50)/50
+ggplot(rf.importances, aes(x=Variable, y=MeanDecreaseAccuracy, color=Model, group=Model)) + geom_point() + geom_line() + theme(axis.text.x=element_text(angle=90, hjust=1)) + labs(title="Variable importances", y="Mean Decrease in Accuracy") + scale_y_continuous(breaks=seq(0, top, by=.02))
 ```
 
 # Packages used
