@@ -1,0 +1,52 @@
+---
+title: "3 Model Selection and Validation"
+author: "Paul Hively"
+date: "May 16, 2016"
+output: html_document
+---
+
+Source can be viewed [on GitHub](https://github.com/phively/gsb-sols-proj/blob/master/3%20Model%20selection%20and%20validation.Rmd)
+
+# Setup and loading the data
+
+Begin by loading the data used for the visualizations in part 1.
+
+```{r, message=F, warning=F, cache=F}
+#### Run Rscript0 to load useful packages and functions ----
+source("Rscript0 - libraries.R")
+source("f.Wrangle.R")
+```
+```{r, message=F, warning=F, cache=F}
+#### Model data cleanup ----
+source("Rscript1a - modeling data appends.R")
+source("Rscript1b - derived variables.R")
+```
+
+* [Rscript0 - libraries.R](https://github.com/phively/gsb-sols-proj/blob/master/Rscript0%20-%20libraries.R)
+* [f.Wrangle.R](https://github.com/phively/gsb-sols-proj/blob/master/f.Wrangle.R)
+* [Rscript1a - modeling data appends.R](https://github.com/phively/gsb-sols-proj/blob/master/Rscript1a%20-%20modeling%20data%20appends.R)
+* [Rscript1b - derived variables.R](https://github.com/phively/gsb-sols-proj/blob/master/Rscript1b%20-%20derived%20variables.R)
+
+The data frame `mderived` now contains the fields that may be useful for modeling.
+
+# Quick review
+
+My goal is to find a way to accurately forecast fundraising revenue. The current model -- "JMod" -- discounts solicitations to a fixed percentage of their expected value based on their current stage and how long it is until the end of the fiscal year.
+
+| Stage  | July-Feb| Mar-Apr |   May   |  June   |
+|--------|:-------:|:-------:|:-------:|:-------:| 
+| Plan   |  1/6    | 1/8     | 0       |   0     |
+| Clear  |  1/3    | 1/6     | 1/8     |   0     |
+| Ask    |  2/3    | 1/3     | 1/6     |   1/8   |
+| Oral   |  1      | 1       | 1       |   1     |
+
+This makes use of three pieces of information: the current solicitation stage $S_{i}$, and today's date $t_{i}$ compared to the expected close date. 
+
+[Last time](http://phively.github.io/gsb-sols-proj/2_Training_and_variable_selection.html), I ran the data through random forests and found several additional predictive variables: `Solicitation.Type.Desc`, `Planned.Amt`, `Expected.Amt`, and `Actual.Amt`.
+
+# Logistic regression, take two
+
+# Packages used
+```{r}
+session_info()
+```
