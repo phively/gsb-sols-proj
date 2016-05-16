@@ -352,7 +352,7 @@ rf.importances <- rbind(data.frame(Model="Plan", imp.plan, Variable=rownames(imp
 ## Plot importances
 # y axis will end at nearest .02 above the maximum in the data
 top <- ceiling(max(rf.importances$MeanDecreaseAccuracy)*50)/50
-ggplot(rf.importances, aes(x=Variable, y=MeanDecreaseAccuracy, color=Model, group=Model)) + geom_point() + geom_line() + theme(axis.text.x=element_text(angle=90, hjust=1)) + labs(title="Variable selection", y="Mean Decrease in Accuracy") + scale_y_continuous(breaks=seq(0, top, by=.02))
+ggplot(rf.importances, aes(x=Variable, y=MeanDecreaseAccuracy, color=Model, group=Model)) + geom_point() + geom_line() + theme(axis.text.x=element_text(angle=90, hjust=1)) + labs(title="Variable importances", y="Mean Decrease in Accuracy") + scale_y_continuous(breaks=seq(0, top, by=.02))
 ```
 
 And the new errors table:
