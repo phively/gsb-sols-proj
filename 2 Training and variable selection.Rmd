@@ -84,7 +84,7 @@ ConfusionMatrix(list(glm.pln.1, glm.clr.1, glm.ask.1, glm.ora.1), modnames=modna
 
 Compare errors for JMod versus the month intercepts logistic model by stage. My error function is the $L_{1}$ norm:
 
-$$L_{1}(\epsilon)=\sum_{i=1}^{n}\epsilon_{i} = \sum_{i=1}^{n}\left|\hat{p}_{i}-p_{i}\right|$$
+$$L_{1}(\epsilon)=\sum_{i=1}^{n}\left|\epsilon_{i}\right| = \sum_{i=1}^{n}\left|\hat{p}_{i}-p_{i}\right|$$
 
 I also included the squared $L_{2}$ norm (equivalent to $RSS$ in OLS regression) for comparison, but it seems like an odd metric for range-restricted data.
 
