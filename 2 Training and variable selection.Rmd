@@ -415,6 +415,8 @@ rf.oral.jm <- randomForest(factor(FY.Oral.Book) ~ ., data=treedat, importance=T)
 errors <- rbind(errors, data.frame(Model="Random forest, JMod fields only", Plan=tail(rf.plan.jm$err.rate[,"OOB"],1), Clear=tail(rf.clear.jm$err.rate[,"OOB"],1), Ask=tail(rf.ask.jm$err.rate[,"OOB"],1), Oral=tail(rf.oral.jm$err.rate[,"OOB"],1), stringsAsFactors=F))
 ## error table
 kable(errors, digits=2)
+## save to disk for later
+write.table(errors, "classification.errors.txt", sep="\t", row.names=F)
 ```
 
 Interesting -- limiting random forest to JMod fields (allows splits only on `Stage`, `stage.fiscal.mo`, and `stage2EOFY`) results in a model that doesn't do any better than the basic GLM. Random forest 3 is parsimonious so it looks like we may have a final set of variables.

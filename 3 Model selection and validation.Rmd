@@ -15,6 +15,8 @@ Begin by loading the data used for the visualizations in part 1.
 #### Run Rscript0 to load useful packages and functions ----
 source("Rscript0 - libraries.R")
 source("f.Wrangle.R")
+source("f.Diagnostics.R")
+source("f.JMod.R")
 ```
 ```{r, message=F, warning=F, cache=F}
 #### Model data cleanup ----
@@ -24,6 +26,8 @@ source("Rscript1b - derived variables.R")
 
 * [Rscript0 - libraries.R](https://github.com/phively/gsb-sols-proj/blob/master/Rscript0%20-%20libraries.R)
 * [f.Wrangle.R](https://github.com/phively/gsb-sols-proj/blob/master/f.Wrangle.R)
+* [f.Diagnostics.R](https://github.com/phively/gsb-sols-proj/blob/master/f.Diagnostics.R)
+* [f.JMod.R](https://github.com/phively/gsb-sols-proj/blob/master/f.JMod.R)
 * [Rscript1a - modeling data appends.R](https://github.com/phively/gsb-sols-proj/blob/master/Rscript1a%20-%20modeling%20data%20appends.R)
 * [Rscript1b - derived variables.R](https://github.com/phively/gsb-sols-proj/blob/master/Rscript1b%20-%20derived%20variables.R)
 
@@ -44,7 +48,52 @@ This makes use of three pieces of information: the current solicitation stage $S
 
 [Last time](http://phively.github.io/gsb-sols-proj/2_Training_and_variable_selection.html), I ran the data through random forests and found several additional predictive variables: `Solicitation.Type.Desc`, `Planned.Amt`, `Expected.Amt`, and `Actual.Amt`.
 
+```{r, echo=F, message=F, warning=F, cache=F}
+# Load the saved errors file from last time
+errors <- data.frame(read.csv("classification.errors.txt", sep="\t", stringsAsFactors=F))
+# Keep only the relevant rows
+errors <- errors[errors$Model %in% c("GLM", "JMod", "Random forest 3"),]
+rownames(errors) <- NULL
+```
+
 # Logistic regression, take two
+
+## Main effects model, raw data
+
+What happens throwing all the main effects in without a transformation?
+
+```{r, message=F, warning=F, cache=F}
+# Plan model, main effects only
+glm.pln <- glm(FY.Plan.Book ~ Solicitation.Type.Desc + Planned.Amt + Expected.Amt + Plan.Future + planning.fiscal.mo, data=mderived, family=binomial())
+# Clear model, main effects only
+glm.clr <- glm(FY.Clear.Book ~ Solicitation.Type.Desc + Planned.Amt + Expected.Amt + Clear.Future + clear.fiscal.mo, data=mderived, family=binomial())
+# Ask model, main effects only
+glm.ask <- glm(FY.Ask.Book ~ Solicitation.Type.Desc + Planned.Amt + Expected.Amt + Ask.Amt + Ask.Future + ask.fiscal.mo, data=mderived, family=binomial())
+# Oral model, main effects only
+glm.ora <- glm(FY.Oral.Book ~ Solicitation.Type.Desc + Planned.Amt + Expected.Amt + Ask.Amt + Oral.Future + oral.fiscal.mo, data=mderived, family=binomial())
+# Put together the error rates
+modnames <- c("Plan", "Clear", "Ask", "Oral")
+confuse <- ConfusionMatrix(list(glm.pln, glm.clr, glm.ask, glm.ora), modnames=modnames, counts=F)
+# Row to add to the error table
+dat1 <- data.frame(Model="GLM main effects notrans", Plan=confuse[["Plan"]]["FALSE","TRUE"] + confuse[["Plan"]]["TRUE","FALSE"], Clear=confuse[["Clear"]]["FALSE","TRUE"] + confuse[["Clear"]]["TRUE","FALSE"], Ask=confuse[["Ask"]]["FALSE","TRUE"] + confuse[["Ask"]]["TRUE","FALSE"], Oral=tryCatch(confuse[["Oral"]]["FALSE","TRUE"] + confuse[["Oral"]]["TRUE","FALSE"], error=function(.) sum(confuse[["Oral"]]["FALSE","TRUE"])))
+# Print the error table
+kable(rbind(errors, dat1), digits=2)
+```
+
+That's a shockingly large improvement whether we use the original GLM or JMod as the baseline. It's not directly comparable to the out-of-bag Random forest 3 estimates, but I'll use a cross-validated error estimate after I'm happy with the final model form.
+
+* Should probably make dat1 into a function...
+
+## Variable distributions
+
+* Dollar amounts are more or less continuous
+* Look at interactions with `Solicitation.Type.Desc`?
+
+## Main effects model, transformed data
+
+* Model error
+* Model summary
+* What's the reference level?
 
 # Packages used
 ```{r}
