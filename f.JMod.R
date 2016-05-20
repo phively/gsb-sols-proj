@@ -12,23 +12,27 @@ JMod <- function(curr.stage, curr.dt, expected.dt, expect.amt=0, act.amt=0, clos
     ifelse(month(curr.dt) %in% c(7,8,9,10,11,12,1,2),
              ifelse(as.numeric(curr.stage)==1, 1/6, #planned
              ifelse(as.numeric(curr.stage)==2, 1/3, #cleared
-             ifelse(as.numeric(curr.stage)==3, 2/3, 1))), #asked/oral, 1 = paperwork in house = fallback
+             ifelse(as.numeric(curr.stage) %in% c(3,4), 2/3, #asked/oral
+             1))), #1 = paperwork in house = fallback
       # If expected to close Mar or Apr
       ifelse(month(curr.dt) %in% c(3,4),
                ifelse(as.numeric(curr.stage)==1, 1/8,
                ifelse(as.numeric(curr.stage)==2, 1/6,
-               ifelse(as.numeric(curr.stage)==3, 1/3, 1))),
+               ifelse(as.numeric(curr.stage) %in% c(3,4), 1/3,
+               1))),
         # If expected to close May
         ifelse(month(curr.dt)==5,
                  ifelse(as.numeric(curr.stage)==1, 0,
                  ifelse(as.numeric(curr.stage)==2, 1/8,
-                 ifelse(as.numeric(curr.stage)==3, 1/6, 1))),
+                 ifelse(as.numeric(curr.stage) %in% c(3,4), 1/6,
+                 1))),
           # If expected to close June
           ifelse(month(curr.dt)==6,
                    ifelse(as.numeric(curr.stage)==1, 0,
                    ifelse(as.numeric(curr.stage)==2, 0,
-                   ifelse(as.numeric(curr.stage)==3, 1/8, 1))),
-                   0 #final fallback of 0 (e.g. no stage)
+                   ifelse(as.numeric(curr.stage) %in% c(3,4), 1/8,
+                   1))),
+                   0 #final fallback of 0 (e.g. no month)
           )
         )
       )

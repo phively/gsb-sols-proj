@@ -66,12 +66,13 @@ Why four separate models rather than a factor for stage? Note that the goal is t
 
 JMod has the following structure. Cell entries are probability to close given that a solicitation is in the indicated stage and month, with an expected close date that fiscal year:
 
-| Stage  | July-Feb| Mar-Apr |   May   |  June   |
-|--------|:-------:|:-------:|:-------:|:-------:| 
-| Plan   |  1/6    | 1/8     | 0       |   0     |
-| Clear  |  1/3    | 1/6     | 1/8     |   0     |
-| Ask    |  2/3    | 1/3     | 1/6     |   1/8   |
-| Oral   |  1      | 1       | 1       |   1     |
+| Stage    | July-Feb| Mar-Apr |   May   |  June   |
+|----------|:-------:|:-------:|:-------:|:-------:| 
+| Plan     |  1/6    | 1/8     | 0       |   0     |
+| Clear    |  1/3    | 1/6     | 1/8     |   0     |
+| Ask      |  2/3    | 1/3     | 1/6     |   1/8   |
+| Oral     |  2/3    | 1/3     | 1/6     |   1/8   |
+| Paperwork|  1      | 1       | 1       |   1     |
 
 Here are the confusion matrices, with a classification threshold of $p=.5$:
 
@@ -108,7 +109,10 @@ ggplot(ggdat, aes(x=glm, y=jmod, color=closed)) + geom_point() + geom_hline(yint
 matrix(c(LpNorm(jmod, p=1), LpNorm(jmod)^2, LpNorm(glmod, p=1), LpNorm(glmod)^2), nrow=2, dimnames=list(c("L1","L2"),c("JMod","glm")))
 ```
 
-JMod wins on the sum of absolute residuals, but it is very negatively biased, to the tune of $-0.325$.
+JMod wins on the sum of absolute residuals, but it is very negatively biased, to the tune of:
+```{r, echo=F, message=F, warning=F, cache=F}
+print(mean(jmod))
+```
 
 ```{r, echo=F, message=F, warning=F, cache=F}
 ## Clear stage
@@ -123,7 +127,10 @@ ggplot(ggdat, aes(x=glm, y=jmod, color=closed)) + geom_point() + geom_hline(yint
 matrix(c(LpNorm(jmod, p=1), LpNorm(jmod)^2, LpNorm(glmod, p=1), LpNorm(glmod)^2), nrow=2, dimnames=list(c("L1","L2"),c("JMod","glm")))
 ```
 
-A tiny bit closer on the sum of absolute residuals, but JMod is still negatively biased, around $-0.295$
+A tiny bit closer on the sum of absolute residuals, but JMod is still negatively biased, around:
+```{r, echo=F, message=F, warning=F, cache=F}
+print(mean(jmod))
+```
 
 ```{r, echo=F, message=F, warning=F, cache=F}
 ## Ask stage
@@ -138,12 +145,15 @@ ggplot(ggdat, aes(x=glm, y=jmod, color=closed)) + geom_point() + geom_hline(yint
 matrix(c(LpNorm(jmod, p=1), LpNorm(jmod)^2, LpNorm(glmod, p=1), LpNorm(glmod)^2), nrow=2, dimnames=list(c("L1","L2"),c("JMod","glm")))
 ```
 
-Clear win for JMod; bias is only $-0.104$.
+Clear win for JMod; bias is only:
+```{r, echo=F, message=F, warning=F, cache=F}
+print(mean(jmod))
+```
 
 ```{r, echo=F, message=F, warning=F, cache=F}
 ## Oral stage
 # Residuals
-jmod.4 <- JMod(curr.stage=4, curr.dt=mdat$Oral.Dt, expected.dt=mdat$Expected.Dt)
+jmod.4 <- JMod(curr.stage=4, curr.dt=mdat$Oral.Dt, expected.dt=mdat$Expected.Dt) # Ask and Oral are considered the same stage
 jmod <- na.omit(JModError(probs=jmod.4$prob, truth=mdat$FY.Oral.Book))
 glmod <- JModError(probs=glm.ora.1$fitted, truth=model.frame(glm.ora.1)[,1])
 # Combined residuals
@@ -153,7 +163,10 @@ ggplot(ggdat, aes(x=glm, y=jmod, color=closed)) + geom_point() + geom_hline(yint
 matrix(c(LpNorm(jmod, p=1), LpNorm(jmod)^2, LpNorm(glmod, p=1), LpNorm(glmod)^2), nrow=2, dimnames=list(c("L1","L2"),c("JMod","glm")))
 ```
 
-JMod bias is $0.047$.
+JMod bias is:
+```{r, echo=F, message=F, warning=F, cache=F}
+print(mean(jmod))
+```
 
 Basically, what this comes down to is how concerned are we about bias? The negative bias is due to overaggressive discounting as the end of the fiscal year (June 30) approaches.
 
@@ -196,9 +209,12 @@ ConfusionMatrixWeighted(preds=fitted(glm.ora.1), truth=model.frame(glm.ora.1)[,1
 (jmod.4$errtable <- ConfusionMatrixWeighted(preds=na.omit(jmod.4$prob), truth=na.omit(mdat$FY.Oral.Book), dimnames=c("truth", "pred")))
 ```
 
-Oral is different; JMod does better in every quadrant. In particular, False-False in the top left is about twice as good as glm. Under JMod, an oral pledge is only ever assigned $p=0$ when it is scheduled to be closed in a future fiscal year.
+Oral is different; JMod is much too pessimistic. Oral pledges actually behave closer to paperwork in house than to ask, and should mainly be assigned $p=0$ when scheduled to be closed in a future fiscal year.
 
-Conclusion: *the most important* variable not currently captured by glm is whether the expected date is in a future year.
+### Conclusions
+
+* Oral stage really needs its own weights.
+* The *most important* variable not currently captured by glm is whether the expected date is in a future year.
 
 # Variable selection
 
