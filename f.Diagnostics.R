@@ -102,11 +102,26 @@ LpNorm <- function(data, p=2) {
   }
 }
 
-#### Make a random forest error plot with tidyr and ggplot2
+#### Make a random forest error plot with tidyr and ggplot2 ----
 PlotForest <- function(forest, title=NULL) {
   # Reformat err.rate to include the count of number of trees, and gather from columns into rows
   err <- data.frame(trees=(1:forest$ntree), forest$err.rate)
   err <- gather(err, "Label", "Error", 2:dim(err)[2])
   # Pretty plot
   ggplot(err, aes(x=trees, y=Error, color=Label)) + geom_line() + labs(title=title) + scale_y_continuous(limits=c(0,max(err$Error)))
+}
+
+#### Function to calculate error rates per stage ----
+CalcErrorRates <- function(confusion.matrices, model.name, modnames=c("Plan", "Clear", "Ask", "Oral")) {
+# confusion.matrices = list of objects; output from ConfusionMatrix
+# model.name = string; row name for current model
+  output <- data.frame(
+    Model = model.name,
+    Plan = confuse[[modnames[1]]]["FALSE","TRUE"] + confuse[[modnames[1]]]["TRUE","FALSE"],
+    Clear = confuse[[modnames[2]]]["FALSE","TRUE"] + confuse[[modnames[2]]]["TRUE","FALSE"],
+    Ask = confuse[[modnames[3]]]["FALSE","TRUE"] + confuse[[modnames[3]]]["TRUE","FALSE"],
+    # Oral includes a fallback condition for when there are no True-False predictions
+    Oral = tryCatch(confuse[[modnames[4]]]["FALSE","TRUE"] + confuse[[modnames[4]]]["TRUE","FALSE"], error=function(.) sum(confuse[[modnames[4]]]["FALSE","TRUE"]))
+  )
+  return(output)
 }

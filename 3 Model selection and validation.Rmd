@@ -76,7 +76,7 @@ glm.ora <- glm(FY.Oral.Book ~ Solicitation.Type.Desc + Planned.Amt + Expected.Am
 modnames <- c("Plan", "Clear", "Ask", "Oral")
 confuse <- ConfusionMatrix(list(glm.pln, glm.clr, glm.ask, glm.ora), modnames=modnames, counts=F)
 # Row to add to the error table
-dat1 <- data.frame(Model="GLM main effects notrans", Plan=confuse[["Plan"]]["FALSE","TRUE"] + confuse[["Plan"]]["TRUE","FALSE"], Clear=confuse[["Clear"]]["FALSE","TRUE"] + confuse[["Clear"]]["TRUE","FALSE"], Ask=confuse[["Ask"]]["FALSE","TRUE"] + confuse[["Ask"]]["TRUE","FALSE"], Oral=tryCatch(confuse[["Oral"]]["FALSE","TRUE"] + confuse[["Oral"]]["TRUE","FALSE"], error=function(.) sum(confuse[["Oral"]]["FALSE","TRUE"])))
+dat1 <- CalcErrorRates(confuse, model.name="GLM main effects notrans", modnames)
 # Print the error table
 kable(rbind(errors, dat1), digits=2)
 ```
