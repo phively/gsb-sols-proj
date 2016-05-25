@@ -54,6 +54,12 @@ mderived <- mdat %>% mutate(
 	ask.fiscal.mo = MoToFiscalMo(month(Ask.Dt)),
 	oral.fiscal.mo = MoToFiscalMo(month(Oral.Dt)),
 	actual.fiscal.mo = MoToFiscalMo(month(Actual.Dt)),
+	# Aggregated variables
+	Sol.Type.Agg = factor(
+	  ifelse(Solicitation.Type.Desc == "Standard Pledge", "Standard Pledge",
+	  ifelse(Solicitation.Type.Desc == "Outright Gift", "Outright Gift",
+	  "Other"))
+	),
 	# Remove variables not needed for modeling or ID
 	Final.Sol.Stage.Dt = NULL,
 	Final.Sol.Stage = NULL,

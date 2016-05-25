@@ -47,7 +47,7 @@ My goal is to find a way to accurately forecast fundraising revenue. The current
 
 This makes use of three pieces of information: the current solicitation stage $S_{i}$, and today's date $t_{i}$ compared to the expected close date. 
 
-[Last time](http://phively.github.io/gsb-sols-proj/2_Training_and_variable_selection.html), I ran the data through random forests and found several additional predictive variables: `Solicitation.Type.Desc`, `Planned.Amt`, `Expected.Amt`, and `Actual.Amt`.
+[Last time](http://phively.github.io/gsb-sols-proj/2_Training_and_variable_selection.html), I ran the data through random forests and found several additional predictive variables: `Solicitation.Type.Desc`, `Planned.Amt`, `Expected.Amt`, and `Ask.Amt`.
 
 ```{r, echo=F, message=F, warning=F, cache=F}
 # Load the saved errors file from last time
@@ -83,18 +83,97 @@ kable(rbind(errors, dat1), digits=2)
 
 That's a shockingly large improvement whether we use the original GLM or JMod as the baseline. It's not directly comparable to the out-of-bag Random forest 3 estimates, but I'll use a cross-validated error estimate after I'm happy with the final model form.
 
-* Should probably make dat1 into a function...
+# Variable distributions
 
-## Variable distributions
+## Dollar amounts
 
-* Dollar amounts are more or less continuous
-* Look at interactions with `Solicitation.Type.Desc`?
+Before looking at the data, I know that `Planned.Amt`, `Expected.Amt`, and `Ask.Amt` are continuous variables theoretically bounded by $[0,\infty)$, but expect them to be very unevenly distributed -- because of solicitation strategy they will tend to cluster around nice, round numbers like $100, $25,000, and so on. I don't want to use complex transformations (mixture basis, spline basis) to maintain interpretability, and because the lower bound is exactly 0, some simple transformations won't make sense.
 
-## Main effects model, transformed data
+Here's how the raw data look:
+
+```{r, echo=F, message=F, warning=F, cache=F}
+## Planned Ask Amount
+ggplot(mderived[!is.na(mderived$Planned.Amt),], aes(x=Planned.Amt, y=..density..)) + geom_histogram(bins=60, alpha=.5) + geom_density(color="gray") + scale_x_continuous(labels=scales::dollar) + labs(title="Planned Ask Amount")
+## Expected Amount
+ggplot(mderived[!is.na(mderived$Expected.Amt),], aes(x=Expected.Amt, y=..density..)) + geom_histogram(bins=60, alpha=.5) + geom_density(color="gray") + scale_x_continuous(labels=scales::dollar) + labs(title="Expected Amount")
+## Ask Amount
+ggplot(mderived[!is.na(mderived$Ask.Amt),], aes(x=Ask.Amt, y=..density..)) + geom_histogram(bins=60, alpha=.5) + geom_density(color="gray") + scale_x_continuous(labels=scales::dollar) + labs(title="Ask Amount")
+```
+
+There's a very small number of very large ask amounts. It's a little hard to see, so here's what the data look like on a $\log_{10}$ scale. So that we don't have to drop the 0s, define the transformation:
+
+$$ x^\text{*} = \log_{10}(x + \alpha)$$
+
+The smallest non-zero ask amount is:
+
+```{r, message=F, warning=F, cache=F}
+(alpha <- min(na.omit(mderived$Ask.Amt[mderived$Ask.Amt != 0])))
+```
+
+Plotting the data under this transformation.
+
+```{r, echo=F, message=F, warning=F, cache=F}
+## Planned Ask Amount
+ggplot(mderived, aes(x=(Planned.Amt + alpha), y=..density..)) + geom_histogram(bins=60, alpha=.5) + geom_density(color="gray") + scale_x_log10(breaks=10^(0:7), labels=scales::dollar) + labs(title="Planned Ask Amount", x=expression(paste(log[10],"(Planned.Amt + ",alpha,")")))
+## Expected Amount
+ggplot(mderived[!is.na(mderived$Expected.Amt),], aes(x=(Expected.Amt + alpha), y=..density..)) + geom_histogram(bins=60, alpha=.5) + geom_density(color="gray") + scale_x_log10(breaks=10^(0:7), labels=scales::dollar) + labs(title="Expected Amount", x=expression(paste(log[10],"(Expected.Amt + ",alpha,")")))
+## Ask Amount
+ggplot(mderived[!is.na(mderived$Ask.Amt),], aes(x=(Ask.Amt + alpha), y=..density..)) + geom_histogram(bins=60, alpha=.5) + geom_density(color="gray") + scale_x_log10(breaks=10^(0:7), labels=scales::dollar) + labs(title="Ask Amount", x=expression(paste(log[10],"(Ask.Amt + ",alpha,")")))
+```
+
+That's actually not too far from symmetric.
+
+## Interactions
+
+Are there interactions worth looking at between `Solicitation.Type.Desc` and the others?
+
+```{r, message=F, warning=F, cache=F}
+table(mderived$Solicitation.Type.Desc)
+```
+
+Okay, `Solicitation.Type.Desc` clearly needs to be aggregated, so let's go with Other, Outright Gift, and Standard Pledge. By default, the alphabetically first factor level is the baseline under the treatment constraint, so the model will show contrasts between Other and Outright Gift, and Other and Standard Pledge, which is nice for interpretability.
+
+Look at `Ask.Amt` by `Sol.Type.Agg`:
+
+```{r, echo=F, message=F, warning=F, cache=F}
+## Ask Amount
+ggplot(mderived[!is.na(mderived$Ask.Amt),], aes(x=(Ask.Amt + alpha), y=..density..)) + geom_histogram(bins=60, alpha=.55) + geom_density(color="gray") + scale_x_log10(breaks=10^(0:7), labels=scales::dollar) + labs(title="Ask Amount", x=expression(paste(log[10],"(Ask.Amt + ",alpha,")"))) + facet_grid(Sol.Type.Agg ~ .)
+## Ask Amount with result
+ggplot(mderived[!is.na(mderived$Ask.Amt),], aes(x=(Ask.Amt + alpha), y=..density.., fill=FY.Ask.Book)) + geom_histogram(bins=60, alpha=.25, position="identity") + geom_density(alpha=.25) + scale_x_log10(breaks=10^(0:7), labels=scales::dollar) + labs(title="Ask Amount with result", x=expression(paste(log[10],"(Ask.Amt + ",alpha,")"))) + facet_grid(Sol.Type.Agg ~ .)
+```
+
+Other and Standard Pledge look more nearly flat than Outright Gift, so it could be worth checking out.
+
+Also check `ask.fiscal.mo` by `Sol.Type.Agg`:
+
+```{r, echo=F, message=F, warning=F, cache=F}
+fiscal.month.name <- strtrim(month.name, 3)[c(7:12, 1:6)]
+## Ask by month
+ggplot(mderived[!is.na(mderived$Ask.Amt),], aes(x=ask.fiscal.mo, y=..density..)) + geom_histogram(bins=12, alpha=.5) + geom_density(color="gray") + labs(title="Asks by gift type") + facet_grid(Sol.Type.Agg ~ .) + scale_x_continuous(labels=fiscal.month.name, breaks=c(1:12))
+## Ask by month with result
+ggplot(mderived[!is.na(mderived$Ask.Amt),], aes(x=ask.fiscal.mo, y=..density.., fill=FY.Ask.Book)) + geom_histogram(bins=12, alpha=.25, position="identity") + geom_density(alpha=.25) + labs(title="Asks by gift type with result") + facet_grid(Sol.Type.Agg ~ .) + scale_x_continuous(labels=fiscal.month.name, breaks=c(1:12))
+```
+
+Outright gift asks have more success by far in December. Could be worth checking out.
+
+Based on previous findings I expect the Annual Fund group is mostly responsible for plummeting closed solicitation rates toward the end of the fiscal year. Let's check.
+
+```{r, echo=F, message=F, warning=F, cache=F}
+## Ask by month with result
+ggplot(mderived[!is.na(mderived$Ask.Amt) & !is.na(mderived$Ask.Band),], aes(x=ask.fiscal.mo, y=..density.., fill=FY.Ask.Book)) + geom_histogram(bins=12, alpha=.25, position="identity") + geom_density(alpha=.25) + labs(title="Asks by gift type") + facet_grid(Sol.Type.Agg ~ Ask.Band) + scale_x_continuous(labels=fiscal.month.name, breaks=c(1:12))
+```
+
+Confirmed -- the AF group gives on their schedule, not ours.
+
+# Main effects model with transformed data
 
 * Model error
 * Model summary
 * What's the reference level?
+
+# Cross-validated error estimate
+
+It's important that the coefficients be calculated separately for each fold
 
 # Packages used
 ```{r}
