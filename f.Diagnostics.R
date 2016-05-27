@@ -117,11 +117,11 @@ CalcErrorRates <- function(confusion.matrices, model.name, modnames=c("Plan", "C
 # model.name = string; row name for current model
   output <- data.frame(
     Model = model.name,
-    Plan = confuse[[modnames[1]]]["FALSE","TRUE"] + confuse[[modnames[1]]]["TRUE","FALSE"],
-    Clear = confuse[[modnames[2]]]["FALSE","TRUE"] + confuse[[modnames[2]]]["TRUE","FALSE"],
-    Ask = confuse[[modnames[3]]]["FALSE","TRUE"] + confuse[[modnames[3]]]["TRUE","FALSE"],
+    Plan = confusion.matrices[[modnames[1]]]["FALSE","TRUE"] + confusion.matrices[[modnames[1]]]["TRUE","FALSE"],
+    Clear = confusion.matrices[[modnames[2]]]["FALSE","TRUE"] + confusion.matrices[[modnames[2]]]["TRUE","FALSE"],
+    Ask = confusion.matrices[[modnames[3]]]["FALSE","TRUE"] + confusion.matrices[[modnames[3]]]["TRUE","FALSE"],
     # Oral includes a fallback condition for when there are no True-False predictions
-    Oral = tryCatch(confuse[[modnames[4]]]["FALSE","TRUE"] + confuse[[modnames[4]]]["TRUE","FALSE"], error=function(.) sum(confuse[[modnames[4]]]["FALSE","TRUE"]))
+    Oral = tryCatch(confuse[[modnames[4]]]["FALSE","TRUE"] + confusion.matrices[[modnames[4]]]["TRUE","FALSE"], error=function(.) sum(confusion.matrices[[modnames[4]]]["FALSE","TRUE"]))
   )
   return(output)
 }

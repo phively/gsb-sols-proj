@@ -160,20 +160,84 @@ Based on previous findings I expect the Annual Fund group is mostly responsible 
 
 ```{r, echo=F, message=F, warning=F, cache=F}
 ## Ask by month with result
-ggplot(mderived[!is.na(mderived$Ask.Amt) & !is.na(mderived$Ask.Band),], aes(x=ask.fiscal.mo, y=..density.., fill=FY.Ask.Book)) + geom_histogram(bins=12, alpha=.25, position="identity") + geom_density(alpha=.25) + labs(title="Asks by gift type") + facet_grid(Sol.Type.Agg ~ Ask.Band) + scale_x_continuous(labels=fiscal.month.name, breaks=c(1:12))
+ggplot(mderived[!is.na(mderived$Ask.Amt) & !is.na(mderived$Ask.Band),], aes(x=ask.fiscal.mo, y=..density.., fill=FY.Ask.Book)) + geom_histogram(bins=12, alpha=.25, position="identity") + geom_density(alpha=.25) + labs(title="Asks by gift type") + facet_grid(Sol.Type.Agg ~ Ask.Band) + scale_x_continuous(labels=fiscal.month.name, breaks=c(1:12)) + theme(axis.text.x=element_text(angle=90, vjust=.4))
 ```
 
 Confirmed -- the AF group gives on their schedule, not ours.
 
+Additional considerations -- does it make sense to *remove* 0s before the $\log_{10}$ transformation as opposed to adding a constant $\alpha$?
+
+* `Planned.Amt` = $0 is an error
+* `Ask.Amt` = $0 is an error
+* `Expected.Amt` = $0 is not an error; reflects what the solicitation manager thought was most likely at the time
+
+I think it makes sense to keep the $0 values and transform them appropraitely. If necessary, `Ask.Amt` = $0 can be filled in with `Planned.Amt` and vice versa.
+
 # Main effects model with transformed data
 
-* Model error
-* Model summary
-* What's the reference level?
+```{r, message=F, warning=F, cache=F}
+# Function to transform dollar amounts as above
+LogTrans <- function(x, a=alpha) {log10(x + a)}
+# Function to turn fiscal month into a factor
+FacMonth <- function(x) {factor(x, labels=fiscal.month.name)}
+# Plan model, main effects only
+glm.pln.t <- glm(FY.Plan.Book ~ Sol.Type.Agg + LogTrans(Planned.Amt) + LogTrans(Expected.Amt) + Plan.Future + FacMonth(planning.fiscal.mo), data=mderived, family=binomial())
+# Clear model, main effects only
+glm.clr.t <- glm(FY.Clear.Book ~ Sol.Type.Agg + LogTrans(Planned.Amt) + LogTrans(Expected.Amt) + Clear.Future + FacMonth(clear.fiscal.mo), data=mderived, family=binomial())
+# Ask model, main effects only
+glm.ask.t <- glm(FY.Ask.Book ~ Sol.Type.Agg + LogTrans(Planned.Amt) + LogTrans(Expected.Amt) + LogTrans(Ask.Amt) + Ask.Future + FacMonth(ask.fiscal.mo), data=mderived, family=binomial())
+# Oral model, main effects only
+glm.ora.t <- glm(FY.Oral.Book ~ Sol.Type.Agg + LogTrans(Planned.Amt) + LogTrans(Expected.Amt) + LogTrans(Ask.Amt) + Oral.Future + FacMonth(oral.fiscal.mo), data=mderived, family=binomial())
+# Put together the error rates
+confuse <- ConfusionMatrix(list(glm.pln.t, glm.clr.t, glm.ask.t, glm.ora.t), modnames=modnames, counts=F)
+# Row to add to the error table
+dat2 <- CalcErrorRates(confuse, model.name="GLM main effects trans", modnames)
+# Print the error table
+kable(rbind(errors, dat1, dat2), digits=2)
+```
+
+This gives the same error rate as the untransformed data, interestingly. Let's look at each of these models.
+
+```{r, message=F, warning=F, cache=F}
+summary(glm.pln.t)
+```
+
+Planned and Expected seem to cancel each other out to some degree, but just including one increases the error rate: 
+
+```{r, message=F, warning=F, cache=F}
+# Error comparison
+rbind(dat2, CalcErrorRates(ConfusionMatrix(list(
+    update(glm.pln.t, . ~ . -LogTrans(Expected.Amt)),
+    update(glm.clr.t, . ~ . -LogTrans(Expected.Amt)),
+    update(glm.ask.t, . ~ . -LogTrans(Expected.Amt)),
+    update(glm.ora.t, . ~ . -LogTrans(Expected.Amt))
+  ), modnames=modnames, counts=F
+), model.name="No Expected.Amt", modnames))
+```
+
+So it looks like Month doesn't make much of a difference in the end, which is intellectally unsatisfying, but perhaps an inevitable result of optimizing for probability to close (too noisy). The final models can drop these.
+
+```{r, message=F, warning=F, cache=F}
+# Plan model, main effects only
+glm.pln.t <- glm(FY.Plan.Book ~ Sol.Type.Agg + LogTrans(Planned.Amt) + LogTrans(Expected.Amt) + Plan.Future, data=mderived, family=binomial())
+# Clear model, main effects only
+glm.clr.t <- glm(FY.Clear.Book ~ Sol.Type.Agg + LogTrans(Planned.Amt) + LogTrans(Expected.Amt) + Clear.Future, data=mderived, family=binomial())
+# Ask model, main effects only
+glm.ask.t <- glm(FY.Ask.Book ~ Sol.Type.Agg + LogTrans(Planned.Amt) + LogTrans(Expected.Amt) + LogTrans(Ask.Amt) + Ask.Future, data=mderived, family=binomial())
+# Oral model, main effects only
+glm.ora.t <- glm(FY.Oral.Book ~ Sol.Type.Agg + LogTrans(Planned.Amt) + LogTrans(Expected.Amt) + LogTrans(Ask.Amt) + Oral.Future, data=mderived, family=binomial())
+# Put together the error rates
+confuse <- ConfusionMatrix(list(glm.pln.t, glm.clr.t, glm.ask.t, glm.ora.t), modnames=modnames, counts=F)
+# Row to add to the error table
+dat3 <- CalcErrorRates(confuse, model.name="GLM trans no month", modnames)
+# Print the error table
+kable(rbind(errors, dat1, dat2, dat3), digits=2)
+```
 
 # Cross-validated error estimate
 
-It's important that the coefficients be calculated separately for each fold
+* It's important that the coefficients be calculated separately for each fold
+* These error rates and models definitely need to be compared to JMod in its native environment, namely predicted dollar amounts
 
 # Packages used
 ```{r}
