@@ -234,6 +234,8 @@ confuse <- ConfusionMatrix(list(glm.pln.t, glm.clr.t, glm.ask.t, glm.ora.t), mod
 dat3 <- CalcErrorRates(confuse, model.name="GLM trans no month", modnames)
 # Print the error table
 kable(rbind(errors, dat1, dat2, dat3), digits=2)
+# Save the models
+save(glm.pln.t, glm.clr.t, glm.ask.t, glm.ora.t, file="logistic.models.Rdata")
 ```
 
 # Cross-validated error estimate
