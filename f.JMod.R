@@ -40,7 +40,7 @@ JMod <- function(curr.stage, curr.dt, expected.dt, expect.amt=0, act.amt=0, clos
   )
   pred <- ifelse(is.na(expect.amt), 0, expect.amt) * prob
   err <- pred - ifelse(is.na(act.amt), 0, act.amt) * closed.in.fy
-  out <- list(probability=prob, prediction=pred, error=err)
+  out <- list(probability=prob, prediction=pred, actual=act.amt, error=err)
   return(out)
 }
 

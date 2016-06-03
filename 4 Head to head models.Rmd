@@ -1,0 +1,135 @@
+---
+title: "4 Head to head models"
+author: "Paul Hively"
+date: "June 3, 2016"
+output: html_document
+---
+
+Source can be viewed [on GitHub](https://github.com/phively/gsb-sols-proj/blob/master/4%20Head%20to%20head%20models.Rmd)
+
+# Loading and formatting the data
+
+Begin by loading the models to be compared.
+
+```{r, message=F, warning=F, cache=F}
+#### Run Rscript0 to load useful packages and functions ----
+source("Rscript0 - libraries.R")
+source("f.Wrangle.R")
+source("f.Diagnostics.R")
+source("f.JMod.R")
+```
+```{r, message=F, warning=F, cache=F}
+#### Model data cleanup ----
+source("Rscript1a - modeling data appends.R")
+source("Rscript1b - derived variables.R")
+source("Rscript1c - additional predictors.R")
+#### Models from last time ----
+load("logistic.models.Rdata")
+### Point-in-time data file ----
+sols <- read.csv("joe.dedupe.txt", sep="\t", stringsAsFactors=F)
+```
+
+* [Rscript0 - libraries.R](https://github.com/phively/gsb-sols-proj/blob/master/Rscript0%20-%20libraries.R)
+* [f.Wrangle.R](https://github.com/phively/gsb-sols-proj/blob/master/f.Wrangle.R)
+* [f.Diagnostics.R](https://github.com/phively/gsb-sols-proj/blob/master/f.Diagnostics.R)
+* [f.JMod.R](https://github.com/phively/gsb-sols-proj/blob/master/f.JMod.R)
+* [Rscript1c - additional predictors.R](https://github.com/phively/gsb-sols-proj/blob/master/Rscript1c%20-%20additional%2predictors.R)
+
+# Data transformations and setup for the model
+
+The `sols` data frame was created for a different project and doesn't have all the columns needed to make predictions in the new model. The following fields are required:
+
+#### JMod
+`Curr.Stage`, `Curr.Dt`, `Expected.Dt`, `Expected.Amt`, `Actual.Amt`, `Closed.In.FY`
+
+#### GLMs
+`FY.Plan.Book`, `FY.Clear.Book`, `FY.Ask.Book`, `FY.Oral.Book`, `Sol.Type.Agg`, `lt.Planned.Amt`, `lt.Expected.Amt`, `lt.Ask.Amt`, `Plan.Future`, `Clear.Future`, `Ask.Future`, `Oral.Future`
+
+Let's go about reshaping `sols`:
+
+```{r, message=F, warning=F, cache=F}
+## Grab existing fields
+sols2 <- sols %>% select(Solicitation.ID, Final.Sol.Stage, Solicitation.Stage.Desc, filename, rpt.date, Expected.Dt, Expected.Amt, Actual.Amt, Resolved.In.FY, Closed.In.FY, Solicitation.Type.Desc, Planned.Ask.Amt, Ask.Amt)
+## Convert date fields
+sols2 <- ToDate(sols2, c("rpt.date", "Expected.Dt"))
+## Impute any missing values from mdat
+# Expected
+sols2$Expected.Amt[is.na(sols2$Expected.Amt)] <- left_join(sols2[is.na(sols2$Expected.Amt), c("Solicitation.ID", "Expected.Amt")], mdat[, c("Solicitation.ID", "Expected.Amt")], by="Solicitation.ID")[, 3]
+# Actual
+sols2$Actual.Amt[is.na(sols2$Actual.Amt)] <- left_join(sols2[is.na(sols2$Actual.Amt), c("Solicitation.ID", "Actual.Amt")], mdat[, c("Solicitation.ID", "Actual.Amt")], by="Solicitation.ID")[, 3]
+# Planned
+sols2$Planned.Ask.Amt[is.na(sols2$Planned.Ask.Amt)] <- left_join(sols2[is.na(sols2$Planned.Ask.Amt), c("Solicitation.ID", "Planned.Ask.Amt")], mdat[, c("Solicitation.ID", "Planned.Amt")], by="Solicitation.ID")[, 3]
+# Ask
+sols2$Ask.Amt[is.na(sols2$Ask.Amt)] <- left_join(sols2[is.na(sols2$Ask.Amt), c("Solicitation.ID", "Ask.Amt")], mdat[, c("Solicitation.ID", "Ask.Amt")], by="Solicitation.ID")[, 3]
+## Create derived fields
+sol.stage <- substr(sols2$Solicitation.Stage.Desc, 1, 2)
+sols2 <- sols2 %>% mutate(
+  Curr.Stage = ifelse(sol.stage %in% c("1.", "2.", "3.", "3A", "3B", "3C", "4."), 1,
+               ifelse(sol.stage %in% c("5.", "6."), 2,
+               ifelse(sol.stage %in% c("7."), 3,
+               ifelse(sol.stage %in% c("8."), 4,
+               ifelse(sol.stage %in% c("9."), 5,
+               NA)
+               )))),
+  FY.Plan.Book = Curr.Stage == 1 & Closed.In.FY,
+  FY.Clear.Book = Curr.Stage == 2 & Closed.In.FY,
+  FY.Ask.Book = Curr.Stage == 3 & Closed.In.FY,
+  FY.Oral.Book = Curr.Stage == 4 & Closed.In.FY,
+  Sol.Type.Agg = factor(
+	  ifelse(Solicitation.Type.Desc == "Standard Pledge", "Standard Pledge",
+	  ifelse(Solicitation.Type.Desc == "Outright Gift", "Outright Gift",
+	  "Other")
+  )),
+  lt.Planned.Amt = LogTrans(Planned.Ask.Amt),
+  lt.Expected.Amt = LogTrans(Expected.Amt),
+  lt.Ask.Amt = LogTrans(Ask.Amt),
+  Actual.Amt.In.FY = Actual.Amt * Closed.In.FY,
+  Expect.In.Future.FY = Expected.Dt > FYE(rpt.date)
+)
+## Select needed fields
+sols2 <- sols2 %>% select(Solicitation.ID, Final.Sol.Stage, Solicitation.Stage.Desc, Curr.Stage, filename, rpt.date, Expected.Dt, Planned.Ask.Amt, Ask.Amt, Expected.Amt, Actual.Amt, Actual.Amt.In.FY, Closed.In.FY, Sol.Type.Agg, lt.Planned.Amt, lt.Expected.Amt, lt.Ask.Amt, Expected.Dt, Expect.In.Future.FY)
+write.table(sols2, file="pit-dat.txt", sep="\t", row.names=F)
+```
+
+# Comparisons
+
+Now that I have a point-in-time data file, I can make predictions for each discrete time point.
+
+```{r, message=F, warning=F, cache=F}
+## JMod predictions
+jmod.preds <- JMod(curr.stage=sols2$Curr.Stage, curr.dt=sols2$rpt.date, expected.dt=sols2$Expected.Dt, expect.amt=sols2$Expected.Amt, act.amt=sols2$Actual.Amt, closed.in.fy=sols2$Closed.In.FY)
+# Add the report date
+jmod.preds$dt <- sols2$rpt.date
+jmod.preds <- data.frame(jmod.preds)
+## GLM predictions
+PredictGLM <- function(model, data){
+  data.frame(probability = predict(model, newdata=data, type="response")) %>%
+  mutate(prediction = probability * data$Expected.Amt,
+         error = prediction - ifelse(is.na(data$Actual.Amt), 0, data$Actual.Amt) * data$Closed.In.FY,
+         dt = data$rpt.date)
+}
+# Plan
+glmdat <- sols2 %>% filter(Curr.Stage == 1) %>% mutate(FY.Plan.Book = Closed.In.FY, Plan.Future = Expect.In.Future.FY)
+plan.preds <- PredictGLM(glm.pln.t, glmdat)
+# Clear
+glmdat <- sols2 %>% filter(Curr.Stage == 2) %>% mutate(FY.Clear.Book = Closed.In.FY, Clear.Future = Expect.In.Future.FY)
+clear.preds <- PredictGLM(glm.clr.t, glmdat)
+# Ask
+glmdat <- sols2 %>% filter(Curr.Stage == 3) %>% mutate(FY.Ask.Book = Closed.In.FY, Ask.Future = Expect.In.Future.FY)
+ask.preds <- PredictGLM(glm.ask.t, glmdat)
+# Oral
+glmdat <- sols2 %>% filter(Curr.Stage == 4) %>% mutate(FY.Oral.Book = Closed.In.FY, Oral.Future = Expect.In.Future.FY)
+oral.preds <- PredictGLM(glm.ora.t, glmdat)
+# Combine
+glm.preds <- rbind(plan.preds, clear.preds, ask.preds, oral.preds)
+```
+
+```{r, message=F, warning=F, cache=F}
+ggdat <- jmod.preds %>% group_by(dt) %>% summarise(pred = sum(prediction), act = sum(actual))
+ggplot(data=ggdat, aes(x=dt, y=act)) + geom_point(color="red") + geom_line(color="red") + geom_point(aes(y=pred), color="blue")
+```
+
+# Packages used
+```{r}
+session_info()
+```
