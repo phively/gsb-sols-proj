@@ -62,12 +62,12 @@ ConfusionMatrix <- function(models, testdata=NULL, modnames=NULL, threshold=.5, 
   for (i in 1:n) {
     # Extract the current model
     m <- models[[i]]
-    # Extract the current response variable
     # Extract the current test data
     if (debug) {print(paste("length test data", length(testdata), "i", i))}
     if (length(testdata) >= i){
       t <- testdata[[i]]
     } else {
+      # If there is no more test data, keep using the last element of the testdata list
       t <- testdata[[length(testdata)]]
     }
     if (debug) {
