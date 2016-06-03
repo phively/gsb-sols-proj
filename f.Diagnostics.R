@@ -41,7 +41,7 @@ CompareDeviances <- function(models, modnames, debug=F) {
 }
 
 #### Generate confusion matrix from a list of models ----
-ConfusionMatrix <- function(models, modnames=NULL, threshold=.5, counts=T, digits=2, debug=F) {
+ConfusionMatrix <- function(models, testdata=NULL, modnames=NULL, threshold=.5, counts=T, digits=2, debug=F) {
 # models = a list of one or more model objects
 # modnames = vector of the names to apply to the model objects
 # threshold = classification threshold for confusion matrix; usually would want to set to .5
@@ -49,23 +49,32 @@ ConfusionMatrix <- function(models, modnames=NULL, threshold=.5, counts=T, digit
 # digits = significant digits (NOT rounded) to include
   out <- list()
   # Check if not actually passed a list of models
-  is.list <- class(models)[1] == "list"
-  if (debug) {print(is.list)}
-  if (is.list) {
-    n <- length(models)
-  } else {
-    n <- 1
-  }
+  if (class(models)[[1]] != "list") {models <- list(models)}
+  n <- length(models)
   if (debug) {print(paste("n =", n))}
+  # If not given test data, use the model data frames themselves
+  if (is.null(testdata)) {
+    for (i in 1:n) {testdata[[i]] <- model.frame(models[[i]])}
+  }
+  # Reshape test data
+  if (class(testdata) != "list") {testdata <- list(testdata)}
   # Loop through models
   for (i in 1:n) {
     # Extract the current model
-    if (is.list) {
-      m <- models[[i]]
+    m <- models[[i]]
+    # Extract the current response variable
+    # Extract the current test data
+    if (debug) {print(paste("length test data", length(testdata), "i", i))}
+    if (length(testdata) >= i){
+      t <- testdata[[i]]
     } else {
-      m <- models
+      t <- testdata[[length(testdata)]]
     }
-    tabl <- table(truth=model.frame(m)[,1], pred=fitted(m)>=threshold)
+    if (debug) {
+      print(paste("Test data dimensions", nrow(t), "*", ncol(t), sep=" "))
+      print(paste("Test data type", class(t)))
+    }
+    tabl <- table(truth=t[, as.character(m$formula)[2]], pred=predict(m, newdata=t, type="response") >= threshold)
     if (counts) {out[[i]] <- addmargins(tabl)}
     if (!counts) {out[[i]] <- signif(addmargins(prop.table(tabl)), digits)}
   }

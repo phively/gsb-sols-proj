@@ -180,14 +180,16 @@ I think it makes sense to keep the $0 values and transform them appropraitely. I
 LogTrans <- function(x, a=alpha) {log10(x + a)}
 # Function to turn fiscal month into a factor
 FacMonth <- function(x) {factor(x, labels=fiscal.month.name)}
+# New variables
+mderived <- mderived %>% mutate(lt.Planned.Amt = LogTrans(Planned.Amt), lt.Expected.Amt = LogTrans(Expected.Amt), lt.Ask.Amt = LogTrans(Ask.Amt), fm.planning = FacMonth(planning.fiscal.mo), fm.clear = FacMonth(clear.fiscal.mo), fm.ask = FacMonth(ask.fiscal.mo), fm.oral = FacMonth(oral.fiscal.mo))
 # Plan model, main effects only
-glm.pln.t <- glm(FY.Plan.Book ~ Sol.Type.Agg + LogTrans(Planned.Amt) + LogTrans(Expected.Amt) + Plan.Future + FacMonth(planning.fiscal.mo), data=mderived, family=binomial())
+glm.pln.t <- glm(FY.Plan.Book ~ Sol.Type.Agg + lt.Planned.Amt + lt.Expected.Amt + Plan.Future + fm.planning, data=mderived, family=binomial())
 # Clear model, main effects only
-glm.clr.t <- glm(FY.Clear.Book ~ Sol.Type.Agg + LogTrans(Planned.Amt) + LogTrans(Expected.Amt) + Clear.Future + FacMonth(clear.fiscal.mo), data=mderived, family=binomial())
+glm.clr.t <- glm(FY.Clear.Book ~ Sol.Type.Agg + lt.Planned.Amt + lt.Expected.Amt + Clear.Future + fm.clear, data=mderived, family=binomial())
 # Ask model, main effects only
-glm.ask.t <- glm(FY.Ask.Book ~ Sol.Type.Agg + LogTrans(Planned.Amt) + LogTrans(Expected.Amt) + LogTrans(Ask.Amt) + Ask.Future + FacMonth(ask.fiscal.mo), data=mderived, family=binomial())
+glm.ask.t <- glm(FY.Ask.Book ~ Sol.Type.Agg + lt.Planned.Amt + lt.Expected.Amt + lt.Ask.Amt + Ask.Future + fm.ask, data=mderived, family=binomial())
 # Oral model, main effects only
-glm.ora.t <- glm(FY.Oral.Book ~ Sol.Type.Agg + LogTrans(Planned.Amt) + LogTrans(Expected.Amt) + LogTrans(Ask.Amt) + Oral.Future + FacMonth(oral.fiscal.mo), data=mderived, family=binomial())
+glm.ora.t <- glm(FY.Oral.Book ~ Sol.Type.Agg + lt.Planned.Amt + lt.Expected.Amt + lt.Ask.Amt + Oral.Future + fm.oral, data=mderived, family=binomial())
 # Put together the error rates
 confuse <- ConfusionMatrix(list(glm.pln.t, glm.clr.t, glm.ask.t, glm.ora.t), modnames=modnames, counts=F)
 # Row to add to the error table
@@ -207,10 +209,10 @@ Planned and Expected seem to cancel each other out to some degree, but just incl
 ```{r, message=F, warning=F, cache=F}
 # Error comparison
 rbind(dat2, CalcErrorRates(ConfusionMatrix(list(
-    update(glm.pln.t, . ~ . -LogTrans(Expected.Amt)),
-    update(glm.clr.t, . ~ . -LogTrans(Expected.Amt)),
-    update(glm.ask.t, . ~ . -LogTrans(Expected.Amt)),
-    update(glm.ora.t, . ~ . -LogTrans(Expected.Amt))
+    update(glm.pln.t, . ~ . -lt.Expected.Amt),
+    update(glm.clr.t, . ~ . -lt.Expected.Amt),
+    update(glm.ask.t, . ~ . -lt.Expected.Amt),
+    update(glm.ora.t, . ~ . -lt.Expected.Amt)
   ), modnames=modnames, counts=F
 ), model.name="No Expected.Amt", modnames))
 ```
@@ -219,13 +221,13 @@ So it looks like Month doesn't make much of a difference in the end, which is in
 
 ```{r, message=F, warning=F, cache=F}
 # Plan model, main effects only
-glm.pln.t <- glm(FY.Plan.Book ~ Sol.Type.Agg + LogTrans(Planned.Amt) + LogTrans(Expected.Amt) + Plan.Future, data=mderived, family=binomial())
+glm.pln.t <- glm(FY.Plan.Book ~ Sol.Type.Agg + lt.Planned.Amt + lt.Expected.Amt + Plan.Future, data=mderived, family=binomial())
 # Clear model, main effects only
-glm.clr.t <- glm(FY.Clear.Book ~ Sol.Type.Agg + LogTrans(Planned.Amt) + LogTrans(Expected.Amt) + Clear.Future, data=mderived, family=binomial())
+glm.clr.t <- glm(FY.Clear.Book ~ Sol.Type.Agg + lt.Planned.Amt + lt.Expected.Amt + Clear.Future, data=mderived, family=binomial())
 # Ask model, main effects only
-glm.ask.t <- glm(FY.Ask.Book ~ Sol.Type.Agg + LogTrans(Planned.Amt) + LogTrans(Expected.Amt) + LogTrans(Ask.Amt) + Ask.Future, data=mderived, family=binomial())
+glm.ask.t <- glm(FY.Ask.Book ~ Sol.Type.Agg + lt.Planned.Amt + lt.Expected.Amt + lt.Ask.Amt + Ask.Future, data=mderived, family=binomial())
 # Oral model, main effects only
-glm.ora.t <- glm(FY.Oral.Book ~ Sol.Type.Agg + LogTrans(Planned.Amt) + LogTrans(Expected.Amt) + LogTrans(Ask.Amt) + Oral.Future, data=mderived, family=binomial())
+glm.ora.t <- glm(FY.Oral.Book ~ Sol.Type.Agg + lt.Planned.Amt + lt.Expected.Amt + lt.Ask.Amt + Oral.Future, data=mderived, family=binomial())
 # Put together the error rates
 confuse <- ConfusionMatrix(list(glm.pln.t, glm.clr.t, glm.ask.t, glm.ora.t), modnames=modnames, counts=F)
 # Row to add to the error table
@@ -236,8 +238,42 @@ kable(rbind(errors, dat1, dat2, dat3), digits=2)
 
 # Cross-validated error estimate
 
-* It's important that the coefficients be calculated separately for each fold
-* These error rates and models definitely need to be compared to JMod in its native environment, namely predicted dollar amounts
+In-sample error estimates are biased, so let's see what the 5-fold cross-validated error is. Note that it's important that the coefficients be calculated separately for each holdout sample.
+
+```{r, message=F, warning=F, cache=F}
+## Randomly shuffle the data
+set.seed(57141)
+k <- 5
+rand.ind <- sample(1:nrow(mderived), nrow(mderived))
+n.size <- ceiling(nrow(mderived)/k)
+folds <- list()
+# Grab next n.size shuffled row indices
+for (i in 1:k) {folds[[i]] <- na.omit(rand.ind[(n.size * (i - 1) + 1):(n.size * i)])}
+## Cross-validation 
+# Vector to store the errors
+error.list <- NULL
+for (i in 1:k) {
+  # Plan model, main effects only
+  glm.pln.t <- glm(FY.Plan.Book ~ Sol.Type.Agg + lt.Planned.Amt + lt.Expected.Amt + Plan.Future, data=mderived[-folds[[i]],], family=binomial())
+  # Clear model, main effects only
+  glm.clr.t <- glm(FY.Clear.Book ~ Sol.Type.Agg + lt.Planned.Amt + lt.Expected.Amt + Clear.Future, data=mderived[-folds[[i]],], family=binomial())
+  # Ask model, main effects only
+  glm.ask.t <- glm(FY.Ask.Book ~ Sol.Type.Agg + lt.Planned.Amt + lt.Expected.Amt + lt.Ask.Amt + Ask.Future, data=mderived[-folds[[i]],], family=binomial())
+  # Oral model, main effects only
+  glm.ora.t <- glm(FY.Oral.Book ~ Sol.Type.Agg + lt.Planned.Amt + lt.Expected.Amt + lt.Ask.Amt + Oral.Future, data=mderived[-folds[[i]],], family=binomial())
+  # Put together the error rates
+  confuse <- ConfusionMatrix(list(glm.pln.t, glm.clr.t, glm.ask.t, glm.ora.t), testdata=mderived[folds[[i]],], modnames=modnames, counts=T)
+  # Row to add to the error table
+  error.list <- rbind(error.list, CalcErrorRates(confuse, model.name="GLM trans no month, xval", modnames))
+}
+## Add averaged error to the table
+dat4 <- error.list %>% group_by(Model) %>% summarise(Plan = sum(Plan)/nrow(model.matrix(glm.pln)), Clear = sum(Clear)/nrow(model.matrix(glm.clr)), Ask = sum(Ask)/nrow(model.matrix(glm.ask)), Oral = sum(Oral)/nrow(model.matrix(glm.ora)))
+kable(rbind(errors, dat3, dat4), digits=2)
+```
+
+The error actually comes out pretty much the same.
+
+Of course, these error rates and models need to be compared to JMod in its native environment, namely predicted dollar amounts.
 
 # Packages used
 ```{r}

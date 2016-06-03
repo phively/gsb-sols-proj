@@ -60,3 +60,9 @@ MoToFiscalMo <- function(month.number, start.month=7) {
   return((month.number - start.month) %% 12 + 1)
   # %% is the modulo operator in R
 }
+
+#### Convert fiscal month into a factor ----
+FacMonth <- function(x) {factor(x, labels=fiscal.month.name)}
+
+#### Log transformation with offset a ----
+LogTrans <- function(x, a=alpha) {log10(x + a)}
