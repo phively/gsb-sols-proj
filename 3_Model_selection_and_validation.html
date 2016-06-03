@@ -313,14 +313,16 @@ kable(rbind(errors, dat1), digits=2)</code></pre>
 LogTrans &lt;- function(x, a=alpha) {log10(x + a)}
 # Function to turn fiscal month into a factor
 FacMonth &lt;- function(x) {factor(x, labels=fiscal.month.name)}
+# New variables
+mderived &lt;- mderived %&gt;% mutate(lt.Planned.Amt = LogTrans(Planned.Amt), lt.Expected.Amt = LogTrans(Expected.Amt), lt.Ask.Amt = LogTrans(Ask.Amt), fm.planning = FacMonth(planning.fiscal.mo), fm.clear = FacMonth(clear.fiscal.mo), fm.ask = FacMonth(ask.fiscal.mo), fm.oral = FacMonth(oral.fiscal.mo))
 # Plan model, main effects only
-glm.pln.t &lt;- glm(FY.Plan.Book ~ Sol.Type.Agg + LogTrans(Planned.Amt) + LogTrans(Expected.Amt) + Plan.Future + FacMonth(planning.fiscal.mo), data=mderived, family=binomial())
+glm.pln.t &lt;- glm(FY.Plan.Book ~ Sol.Type.Agg + lt.Planned.Amt + lt.Expected.Amt + Plan.Future + fm.planning, data=mderived, family=binomial())
 # Clear model, main effects only
-glm.clr.t &lt;- glm(FY.Clear.Book ~ Sol.Type.Agg + LogTrans(Planned.Amt) + LogTrans(Expected.Amt) + Clear.Future + FacMonth(clear.fiscal.mo), data=mderived, family=binomial())
+glm.clr.t &lt;- glm(FY.Clear.Book ~ Sol.Type.Agg + lt.Planned.Amt + lt.Expected.Amt + Clear.Future + fm.clear, data=mderived, family=binomial())
 # Ask model, main effects only
-glm.ask.t &lt;- glm(FY.Ask.Book ~ Sol.Type.Agg + LogTrans(Planned.Amt) + LogTrans(Expected.Amt) + LogTrans(Ask.Amt) + Ask.Future + FacMonth(ask.fiscal.mo), data=mderived, family=binomial())
+glm.ask.t &lt;- glm(FY.Ask.Book ~ Sol.Type.Agg + lt.Planned.Amt + lt.Expected.Amt + lt.Ask.Amt + Ask.Future + fm.ask, data=mderived, family=binomial())
 # Oral model, main effects only
-glm.ora.t &lt;- glm(FY.Oral.Book ~ Sol.Type.Agg + LogTrans(Planned.Amt) + LogTrans(Expected.Amt) + LogTrans(Ask.Amt) + Oral.Future + FacMonth(oral.fiscal.mo), data=mderived, family=binomial())
+glm.ora.t &lt;- glm(FY.Oral.Book ~ Sol.Type.Agg + lt.Planned.Amt + lt.Expected.Amt + lt.Ask.Amt + Oral.Future + fm.oral, data=mderived, family=binomial())
 # Put together the error rates
 confuse &lt;- ConfusionMatrix(list(glm.pln.t, glm.clr.t, glm.ask.t, glm.ora.t), modnames=modnames, counts=F)
 # Row to add to the error table
@@ -379,33 +381,33 @@ kable(rbind(errors, dat1, dat2), digits=2)</code></pre>
 <pre class="r"><code>summary(glm.pln.t)</code></pre>
 <pre><code>## 
 ## Call:
-## glm(formula = FY.Plan.Book ~ Sol.Type.Agg + LogTrans(Planned.Amt) + 
-##     LogTrans(Expected.Amt) + Plan.Future + FacMonth(planning.fiscal.mo), 
-##     family = binomial(), data = mderived)
+## glm(formula = FY.Plan.Book ~ Sol.Type.Agg + lt.Planned.Amt + 
+##     lt.Expected.Amt + Plan.Future + fm.planning, family = binomial(), 
+##     data = mderived)
 ## 
 ## Deviance Residuals: 
 ##     Min       1Q   Median       3Q      Max  
 ## -2.2149  -0.4128  -0.2284   0.7647   2.8061  
 ## 
 ## Coefficients:
-##                                 Estimate Std. Error z value Pr(&gt;|z|)    
-## (Intercept)                      1.19175    0.77209   1.544 0.122699    
-## Sol.Type.AggOutright Gift        0.44469    0.55453   0.802 0.422601    
-## Sol.Type.AggStandard Pledge      0.11605    0.53804   0.216 0.829234    
-## LogTrans(Planned.Amt)           -0.95618    0.19441  -4.918 8.72e-07 ***
-## LogTrans(Expected.Amt)           0.71511    0.18283   3.911 9.18e-05 ***
-## Plan.FutureTRUE                 -3.54825    0.23961 -14.809  &lt; 2e-16 ***
-## FacMonth(planning.fiscal.mo)Aug  1.06579    0.37654   2.830 0.004648 ** 
-## FacMonth(planning.fiscal.mo)Sep  1.24399    0.37043   3.358 0.000784 ***
-## FacMonth(planning.fiscal.mo)Oct  0.26686    0.31737   0.841 0.400419    
-## FacMonth(planning.fiscal.mo)Nov  0.48326    0.34860   1.386 0.165666    
-## FacMonth(planning.fiscal.mo)Dec  0.33666    0.33551   1.003 0.315668    
-## FacMonth(planning.fiscal.mo)Jan -0.09131    0.37938  -0.241 0.809806    
-## FacMonth(planning.fiscal.mo)Feb  1.35247    0.44837   3.016 0.002558 ** 
-## FacMonth(planning.fiscal.mo)Mar  1.33966    0.41448   3.232 0.001229 ** 
-## FacMonth(planning.fiscal.mo)Apr  0.38552    0.39483   0.976 0.328854    
-## FacMonth(planning.fiscal.mo)May  0.64025    0.41574   1.540 0.123552    
-## FacMonth(planning.fiscal.mo)Jun  0.57245    0.43996   1.301 0.193206    
+##                             Estimate Std. Error z value Pr(&gt;|z|)    
+## (Intercept)                  1.19175    0.77209   1.544 0.122699    
+## Sol.Type.AggOutright Gift    0.44469    0.55453   0.802 0.422601    
+## Sol.Type.AggStandard Pledge  0.11605    0.53804   0.216 0.829234    
+## lt.Planned.Amt              -0.95618    0.19441  -4.918 8.72e-07 ***
+## lt.Expected.Amt              0.71511    0.18283   3.911 9.18e-05 ***
+## Plan.FutureTRUE             -3.54825    0.23961 -14.809  &lt; 2e-16 ***
+## fm.planningAug               1.06579    0.37654   2.830 0.004648 ** 
+## fm.planningSep               1.24399    0.37043   3.358 0.000784 ***
+## fm.planningOct               0.26686    0.31737   0.841 0.400419    
+## fm.planningNov               0.48326    0.34860   1.386 0.165666    
+## fm.planningDec               0.33666    0.33551   1.003 0.315668    
+## fm.planningJan              -0.09131    0.37938  -0.241 0.809806    
+## fm.planningFeb               1.35247    0.44837   3.016 0.002558 ** 
+## fm.planningMar               1.33966    0.41448   3.232 0.001229 ** 
+## fm.planningApr               0.38552    0.39483   0.976 0.328854    
+## fm.planningMay               0.64025    0.41574   1.540 0.123552    
+## fm.planningJun               0.57245    0.43996   1.301 0.193206    
 ## ---
 ## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
 ## 
@@ -419,10 +421,10 @@ kable(rbind(errors, dat1, dat2), digits=2)</code></pre>
 <p>Planned and Expected seem to cancel each other out to some degree, but just including one increases the error rate:</p>
 <pre class="r"><code># Error comparison
 rbind(dat2, CalcErrorRates(ConfusionMatrix(list(
-    update(glm.pln.t, . ~ . -LogTrans(Expected.Amt)),
-    update(glm.clr.t, . ~ . -LogTrans(Expected.Amt)),
-    update(glm.ask.t, . ~ . -LogTrans(Expected.Amt)),
-    update(glm.ora.t, . ~ . -LogTrans(Expected.Amt))
+    update(glm.pln.t, . ~ . -lt.Expected.Amt),
+    update(glm.clr.t, . ~ . -lt.Expected.Amt),
+    update(glm.ask.t, . ~ . -lt.Expected.Amt),
+    update(glm.ora.t, . ~ . -lt.Expected.Amt)
   ), modnames=modnames, counts=F
 ), model.name=&quot;No Expected.Amt&quot;, modnames))</code></pre>
 <pre><code>##                    Model  Plan Clear   Ask  Oral
@@ -430,13 +432,13 @@ rbind(dat2, CalcErrorRates(ConfusionMatrix(list(
 ## 2        No Expected.Amt 0.199 0.269 0.255 0.075</code></pre>
 <p>So it looks like Month doesn’t make much of a difference in the end, which is intellectally unsatisfying, but perhaps an inevitable result of optimizing for probability to close (too noisy). The final models can drop these.</p>
 <pre class="r"><code># Plan model, main effects only
-glm.pln.t &lt;- glm(FY.Plan.Book ~ Sol.Type.Agg + LogTrans(Planned.Amt) + LogTrans(Expected.Amt) + Plan.Future, data=mderived, family=binomial())
+glm.pln.t &lt;- glm(FY.Plan.Book ~ Sol.Type.Agg + lt.Planned.Amt + lt.Expected.Amt + Plan.Future, data=mderived, family=binomial())
 # Clear model, main effects only
-glm.clr.t &lt;- glm(FY.Clear.Book ~ Sol.Type.Agg + LogTrans(Planned.Amt) + LogTrans(Expected.Amt) + Clear.Future, data=mderived, family=binomial())
+glm.clr.t &lt;- glm(FY.Clear.Book ~ Sol.Type.Agg + lt.Planned.Amt + lt.Expected.Amt + Clear.Future, data=mderived, family=binomial())
 # Ask model, main effects only
-glm.ask.t &lt;- glm(FY.Ask.Book ~ Sol.Type.Agg + LogTrans(Planned.Amt) + LogTrans(Expected.Amt) + LogTrans(Ask.Amt) + Ask.Future, data=mderived, family=binomial())
+glm.ask.t &lt;- glm(FY.Ask.Book ~ Sol.Type.Agg + lt.Planned.Amt + lt.Expected.Amt + lt.Ask.Amt + Ask.Future, data=mderived, family=binomial())
 # Oral model, main effects only
-glm.ora.t &lt;- glm(FY.Oral.Book ~ Sol.Type.Agg + LogTrans(Planned.Amt) + LogTrans(Expected.Amt) + LogTrans(Ask.Amt) + Oral.Future, data=mderived, family=binomial())
+glm.ora.t &lt;- glm(FY.Oral.Book ~ Sol.Type.Agg + lt.Planned.Amt + lt.Expected.Amt + lt.Ask.Amt + Oral.Future, data=mderived, family=binomial())
 # Put together the error rates
 confuse &lt;- ConfusionMatrix(list(glm.pln.t, glm.clr.t, glm.ask.t, glm.ora.t), modnames=modnames, counts=F)
 # Row to add to the error table
@@ -501,10 +503,85 @@ kable(rbind(errors, dat1, dat2, dat3), digits=2)</code></pre>
 </div>
 <div id="cross-validated-error-estimate" class="section level1">
 <h1>Cross-validated error estimate</h1>
-<ul>
-<li>It’s important that the coefficients be calculated separately for each fold</li>
-<li>These error rates and models definitely need to be compared to JMod in its native environment, namely predicted dollar amounts</li>
-</ul>
+<p>In-sample error estimates are biased, so let’s see what the 5-fold cross-validated error is. Note that it’s important that the coefficients be calculated separately for each holdout sample.</p>
+<pre class="r"><code>## Randomly shuffle the data
+set.seed(57141)
+k &lt;- 5
+rand.ind &lt;- sample(1:nrow(mderived), nrow(mderived))
+n.size &lt;- ceiling(nrow(mderived)/k)
+folds &lt;- list()
+# Grab next n.size shuffled row indices
+for (i in 1:k) {folds[[i]] &lt;- na.omit(rand.ind[(n.size * (i - 1) + 1):(n.size * i)])}
+## Cross-validation 
+# Vector to store the errors
+error.list &lt;- NULL
+for (i in 1:k) {
+  # Plan model, main effects only
+  glm.pln.t &lt;- glm(FY.Plan.Book ~ Sol.Type.Agg + lt.Planned.Amt + lt.Expected.Amt + Plan.Future, data=mderived[-folds[[i]],], family=binomial())
+  # Clear model, main effects only
+  glm.clr.t &lt;- glm(FY.Clear.Book ~ Sol.Type.Agg + lt.Planned.Amt + lt.Expected.Amt + Clear.Future, data=mderived[-folds[[i]],], family=binomial())
+  # Ask model, main effects only
+  glm.ask.t &lt;- glm(FY.Ask.Book ~ Sol.Type.Agg + lt.Planned.Amt + lt.Expected.Amt + lt.Ask.Amt + Ask.Future, data=mderived[-folds[[i]],], family=binomial())
+  # Oral model, main effects only
+  glm.ora.t &lt;- glm(FY.Oral.Book ~ Sol.Type.Agg + lt.Planned.Amt + lt.Expected.Amt + lt.Ask.Amt + Oral.Future, data=mderived[-folds[[i]],], family=binomial())
+  # Put together the error rates
+  confuse &lt;- ConfusionMatrix(list(glm.pln.t, glm.clr.t, glm.ask.t, glm.ora.t), testdata=mderived[folds[[i]],], modnames=modnames, counts=T)
+  # Row to add to the error table
+  error.list &lt;- rbind(error.list, CalcErrorRates(confuse, model.name=&quot;GLM trans no month, xval&quot;, modnames))
+}
+## Add averaged error to the table
+dat4 &lt;- error.list %&gt;% group_by(Model) %&gt;% summarise(Plan = sum(Plan)/nrow(model.matrix(glm.pln)), Clear = sum(Clear)/nrow(model.matrix(glm.clr)), Ask = sum(Ask)/nrow(model.matrix(glm.ask)), Oral = sum(Oral)/nrow(model.matrix(glm.ora)))
+kable(rbind(errors, dat3, dat4), digits=2)</code></pre>
+<table>
+<thead>
+<tr class="header">
+<th align="left">Model</th>
+<th align="right">Plan</th>
+<th align="right">Clear</th>
+<th align="right">Ask</th>
+<th align="right">Oral</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">GLM</td>
+<td align="right">0.34</td>
+<td align="right">0.41</td>
+<td align="right">0.42</td>
+<td align="right">0.14</td>
+</tr>
+<tr class="even">
+<td align="left">JMod</td>
+<td align="right">0.40</td>
+<td align="right">0.46</td>
+<td align="right">0.40</td>
+<td align="right">0.43</td>
+</tr>
+<tr class="odd">
+<td align="left">Random forest 3</td>
+<td align="right">0.17</td>
+<td align="right">0.21</td>
+<td align="right">0.23</td>
+<td align="right">0.10</td>
+</tr>
+<tr class="even">
+<td align="left">GLM trans no month</td>
+<td align="right">0.21</td>
+<td align="right">0.25</td>
+<td align="right">0.25</td>
+<td align="right">0.07</td>
+</tr>
+<tr class="odd">
+<td align="left">GLM trans no month, xval</td>
+<td align="right">0.21</td>
+<td align="right">0.26</td>
+<td align="right">0.25</td>
+<td align="right">0.08</td>
+</tr>
+</tbody>
+</table>
+<p>The error actually comes out pretty much the same.</p>
+<p>Of course, these error rates and models need to be compared to JMod in its native environment, namely predicted dollar amounts.</p>
 </div>
 <div id="packages-used" class="section level1">
 <h1>Packages used</h1>
@@ -517,7 +594,7 @@ kable(rbind(errors, dat1, dat2, dat3), digits=2)</code></pre>
 ##  language (EN)                        
 ##  collate  English_United States.1252  
 ##  tz       America/Chicago             
-##  date     2016-05-27</code></pre>
+##  date     2016-06-03</code></pre>
 <pre><code>## Packages ------------------------------------------------------------------</code></pre>
 <pre><code>##  package    * version date       source        
 ##  assertthat   0.1     2013-12-06 CRAN (R 3.3.0)
