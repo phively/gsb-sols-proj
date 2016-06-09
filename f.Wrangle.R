@@ -66,3 +66,12 @@ FacMonth <- function(x) {factor(x, labels=fiscal.month.name)}
 
 #### Log transformation with offset a ----
 LogTrans <- function(x, a=alpha) {log10(x + a)}
+
+#### Push date to 1st of the given month ----
+DateToNthOfMonth <- function(date, n=1) {
+  ymd(
+    as.character(
+      paste(year(date), month(date), as.character(n), sep="-")
+    )
+  )
+}

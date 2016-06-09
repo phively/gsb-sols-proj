@@ -26,7 +26,7 @@ source("Rscript1c - additional predictors.R")
 #### Models from last time ----
 load("logistic.models.Rdata")
 ### Point-in-time data file ----
-sols <- read.csv("joe.dedupe.txt", sep="\t", stringsAsFactors=F)
+sols <- read.csv("sols.dedupe.by.mo.txt", sep="\t", stringsAsFactors=F)
 ```
 
 * [Rscript0 - libraries.R](https://github.com/phively/gsb-sols-proj/blob/master/Rscript0%20-%20libraries.R)
@@ -125,7 +125,7 @@ glm.preds <- rbind(plan.preds, clear.preds, ask.preds, oral.preds)
 ```
 
 ```{r, message=F, warning=F, cache=F}
-ggdat <- jmod.preds %>% group_by(dt) %>% summarise(pred = sum(prediction), act = sum(actual))
+ggdat <- jmod.preds %>% mutate(dt = DateToNthOfMonth(dt, n=1)) %>% group_by(dt) %>% summarise(pred = sum(prediction), act = sum(actual)) 
 ggplot(data=ggdat, aes(x=dt, y=act)) + geom_point(color="red") + geom_line(color="red") + geom_point(aes(y=pred), color="blue")
 ```
 
