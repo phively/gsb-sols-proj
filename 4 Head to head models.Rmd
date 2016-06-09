@@ -96,38 +96,97 @@ write.table(sols2, file="pit-dat.txt", sep="\t", row.names=F)
 Now that I have a point-in-time data file, I can make predictions for each discrete time point.
 
 ```{r, message=F, warning=F, cache=F}
+sols3 <- na.omit(sols2 %>% select(Solicitation.ID, Curr.Stage, rpt.date, Expected.Dt, Expected.Amt, Actual.Amt, Closed.In.FY, Expect.In.Future.FY, Sol.Type.Agg, lt.Planned.Amt, lt.Expected.Amt, lt.Ask.Amt))
 ## JMod predictions
-jmod.preds <- JMod(curr.stage=sols2$Curr.Stage, curr.dt=sols2$rpt.date, expected.dt=sols2$Expected.Dt, expect.amt=sols2$Expected.Amt, act.amt=sols2$Actual.Amt, closed.in.fy=sols2$Closed.In.FY)
+jmod.preds <- JMod(curr.stage=sols3$Curr.Stage, curr.dt=sols3$rpt.date, expected.dt=sols3$Expected.Dt, expect.amt=sols3$Expected.Amt, act.amt=sols3$Actual.Amt, closed.in.fy=sols3$Closed.In.FY)
 # Add the report date
-jmod.preds$dt <- sols2$rpt.date
+jmod.preds$dt <- sols3$rpt.date
+jmod.preds$id <- as.character(paste(sols3$Solicitation.ID, sols3$rpt.date, sep="."))
+jmod.preds$expect <- sols3$Expected.Amt
 jmod.preds <- data.frame(jmod.preds)
 ## GLM predictions
 PredictGLM <- function(model, data){
   data.frame(probability = predict(model, newdata=data, type="response")) %>%
   mutate(prediction = probability * data$Expected.Amt,
          error = prediction - ifelse(is.na(data$Actual.Amt), 0, data$Actual.Amt) * data$Closed.In.FY,
-         dt = data$rpt.date)
+         dt = data$rpt.date,
+         expect = data$Expected.Amt)
 }
 # Plan
-glmdat <- sols2 %>% filter(Curr.Stage == 1) %>% mutate(FY.Plan.Book = Closed.In.FY, Plan.Future = Expect.In.Future.FY)
+glmdat <- sols3 %>% filter(Curr.Stage == 1) %>% mutate(FY.Plan.Book = Closed.In.FY, Plan.Future = Expect.In.Future.FY)
 plan.preds <- PredictGLM(glm.pln.t, glmdat)
 # Clear
-glmdat <- sols2 %>% filter(Curr.Stage == 2) %>% mutate(FY.Clear.Book = Closed.In.FY, Clear.Future = Expect.In.Future.FY)
+glmdat <- sols3 %>% filter(Curr.Stage == 2) %>% mutate(FY.Clear.Book = Closed.In.FY, Clear.Future = Expect.In.Future.FY)
 clear.preds <- PredictGLM(glm.clr.t, glmdat)
 # Ask
-glmdat <- sols2 %>% filter(Curr.Stage == 3) %>% mutate(FY.Ask.Book = Closed.In.FY, Ask.Future = Expect.In.Future.FY)
+glmdat <- sols3 %>% filter(Curr.Stage == 3) %>% mutate(FY.Ask.Book = Closed.In.FY, Ask.Future = Expect.In.Future.FY)
 ask.preds <- PredictGLM(glm.ask.t, glmdat)
 # Oral
-glmdat <- sols2 %>% filter(Curr.Stage == 4) %>% mutate(FY.Oral.Book = Closed.In.FY, Oral.Future = Expect.In.Future.FY)
+glmdat <- sols3 %>% filter(Curr.Stage == 4) %>% mutate(FY.Oral.Book = Closed.In.FY, Oral.Future = Expect.In.Future.FY)
 oral.preds <- PredictGLM(glm.ora.t, glmdat)
 # Combine
 glm.preds <- rbind(plan.preds, clear.preds, ask.preds, oral.preds)
 ```
 
-```{r, message=F, warning=F, cache=F}
-ggdat <- jmod.preds %>% mutate(dt = DateToNthOfMonth(dt, n=1)) %>% group_by(dt) %>% summarise(pred = sum(prediction), act = sum(actual)) 
-ggplot(data=ggdat, aes(x=dt, y=act)) + geom_point(color="red") + geom_line(color="red") + geom_point(aes(y=pred), color="blue")
+Take a look at the comparison.
+
+```{r, echo=F, message=F, warning=F, cache=F}
+## Set up comparison data frame
+ggdat <- jmod.preds %>% mutate(dt = DateToNthOfMonth(dt, n=1)) %>% group_by(dt) %>% summarise(pred = sum(prediction), act = sum(actual))
+## Reformat glm predictions
+tmpdf <- glm.preds %>% mutate(dt = DateToNthOfMonth(dt, n=1)) %>% group_by(dt) %>% summarise(glm.pred = sum(prediction))
+## Bind tmpdf to ggdat
+ggdat <- left_join(ggdat, tmpdf, by = "dt")
+## Plot the comparison
+ggplot(data=ggdat, aes(x=dt, y=act)) + geom_point(aes(color="Actual")) + geom_line(aes(color="Actual"), size=1.5, alpha=.5) + geom_point(aes(y=pred, color="JMod")) + geom_line(aes(y=pred, color="JMod")) + geom_point(aes(y=glm.pred, color="GLM")) + geom_line(aes(y=glm.pred, color="GLM")) + scale_y_continuous(name="Amount", labels=scales::dollar) + scale_x_date(name="Date", date_minor_breaks="month") + labs(title="All solicitations")
 ```
+
+This includes PG solicitations; the GLM way overshoots in FY15 on.
+
+```{r, echo=F, message=F, warning=F, cache=F}
+## Set up comparison data frame
+x <- 5000000
+ggdat <- filter(jmod.preds, expect < x) %>% mutate(dt = DateToNthOfMonth(dt, n=1)) %>% group_by(dt) %>% summarise(pred = sum(prediction), act = sum(actual))
+## Reformat glm predictions
+tmpdf <- filter(glm.preds, expect < x) %>% mutate(dt = DateToNthOfMonth(dt, n=1)) %>% group_by(dt) %>% summarise(glm.pred = sum(prediction))
+## Bind tmpdf to ggdat
+ggdat <- left_join(ggdat, tmpdf, by = "dt")
+## Plot the comparison
+ggplot(data=ggdat, aes(x=dt, y=act)) + geom_point(aes(color="Actual")) + geom_line(aes(color="Actual"), size=1.5, alpha=.5) + geom_point(aes(y=pred, color="JMod")) + geom_line(aes(y=pred, color="JMod")) + geom_point(aes(y=glm.pred, color="GLM")) + geom_line(aes(y=glm.pred, color="GLM")) + scale_y_continuous(name="Amount", labels=scales::dollar) + scale_x_date(name="Date", date_minor_breaks="month") + labs(title=paste("Solicitations under", dollar(x)))
+```
+
+The GLM is clearly better pre-FY15 and after that it seems like a toss-up. That makes sense considering the JMod coefficients are revised each fiscal year while the GLM was trained on the whole dataset.
+
+Of course, the as-yet-unmentioned advantage of using a probabalistic approach is that it allows for the easy estimation of confidence intervals.
+
+```{r, message=F, warning=F, cache=F}
+## Bootstrapped GLM dataset
+set.seed(2358)
+rep <- 1000
+boot.result <- matrix(0, nrow = nrow(glm.preds), ncol = rep)
+for (i in 1:rep) {
+  boot.result[, i] <- (glm.preds$probability >= runif(n=nrow(glm.preds), min=0, max=1)) * glm.preds$expect
+}
+glm.boot <- cbind(glm.preds, data.frame(boot.result))
+# Summarise by date across every bootstrapped dataset
+glm.boot <- filter(glm.boot, expect < x) %>% mutate(dt = DateToNthOfMonth(dt, n=1)) %>% group_by(dt) %>% summarise_each(funs(sum))
+# Find empirical 2.5th, 50th, and 97.5th percentiles (95% CI)
+boot.names <- paste("X", 1:rep, sep="")
+ggdat <- cbind(ggdat, t(apply(glm.boot[, boot.names], MARGIN=1, FUN=quantile, probs=c(.025, .5, .975))))
+```
+
+Basically, for each solicitation, draw `rep` samples from the $\text{Unif}(0,1)$ distribution, and if the randomly generated number is less than or equal to the predicted probability the solicitation will close, count it as closed and take the expected value; otherwise assume it did not close. The empirical 95% CI is bounded by the .025 and .975 quantiles of the data, summed by month.
+
+Plot the results:
+
+```{r, echo=F, message=F, warning=F, cache=F}
+## Plot the comparison
+ggplot(data=ggdat, aes(x=dt, y=act)) + geom_point(aes(color="Actual")) + geom_line(aes(color="Actual"), size=1.5, alpha=.5) + geom_point(aes(y=pred, color="JMod")) + geom_line(aes(y=pred, color="JMod")) + geom_point(aes(y=glm.pred, color="GLM")) + geom_line(aes(y=glm.pred, color="GLM")) + scale_y_continuous(name="Amount", labels=scales::dollar) + scale_x_date(name="Date", date_minor_breaks="month") + geom_ribbon(aes(ymin=`2.5%`, ymax=`97.5%`), fill="green", alpha=.1) + labs(title=paste("Solicitations under", dollar(x), "with 95% GLM CI"))
+```
+
+That's actually not bad. Of course, it would be more fair to re-fit the GLM just on FY2011-FY2015 data and use FY2016 as an out-of-sample test set, but since FY16 is still in progress it's probably not worth doing just yet.
+
+I suspect to make big gains in predictive accuracy I'd need to use a different model structure, e.g. regressing directly on dollar amounts, which is probably worth trying later on.
 
 # Packages used
 ```{r}
