@@ -21,19 +21,28 @@ The probabilities are adjusted from year to year; these were the weights used in
 | Oral     |  2/3    | 1/3     | 1/6     |   1/8   |
 | Paperwork|  1      | 1       | 1       |   1     |
 
+I investigated the following:
+
   * How accurate is this method?
-  * Are all of these variables (expected amount, current date, expected date) predictive?
-  * Are there additional variables that will improve the model's accuracy?
+  * Are each of these variables (expected amount, current date, expected date) predictive?
   * Is there an alternate model for $P(S_{i}=1)$ that performs better?
+  * Are there additional variables that will improve the model's accuracy?
 
 # Data
 
-For model fitting and comparison, data was compiled on 1309 solicitations opened between 7/1/2011 and 3/15/2016 with known outcome (booked, refused, cancelled). 
+The response variable is whether a solicitation was booked by the end of the fiscal year given its state at some earlier point. Covariates include current stage, current date, expected close date, planned ask amount, etc.
 
-For initial model validation, point-in-time data was compiled from 153 historical reports run between 
+For model fitting and comparison, data was compiled on 1309 solicitations opened between 7/1/2011 and 3/15/2016 with known outcome (booked, refused, cancelled).
+
+For initial model validation, point-in-time data was compiled from 153 historical reports run between 8/1/2011 and 2/2/2016.
+
+Final model comparisons include out-of-sample data compiled from reports run between 7/1/2015 and 6/30/2016.
 
 # Variable selection
+
+The most straightforward statistical model extends JMOD, assuming that the probability a solicitation closes is a function of the solicitation stage and 
 
 Confidence bands are based on the standard error for a binomial random variable, $\sqrt{\frac{p(1-p)}{n}}$ (assuming independence).
 
 Should treat Ask and Oral differently (AF/MG plots, with table)
+
