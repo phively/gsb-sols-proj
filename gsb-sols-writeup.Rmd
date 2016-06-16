@@ -1,0 +1,39 @@
+---
+title: "Booth Solicitations Write-up"
+author: "Paul Hively"
+date: "June 16, 2016"
+output: html_document
+---
+
+# Problem statement
+
+My goal is to find a way to accurately forecast fundraising revenue.
+
+The existing model ("JMod") has two components. First, the probability a solicitation $S_{i}$ comes in before the end of the fiscal year is a function of the current stage progress $c$ and time until the end of the year $t$, $P(S_{i}=1)=f(c_{i},t)$. The expected FRP in the current fiscal year is this probability times the expected amount, $E(FRP)=P(S_{i}=1)E(S_{i})$, discounted to 0 if the expected close date is after the end of the fiscal year.
+
+The probabilities are adjusted from year to year; these were the weights used in fiscal year 2015, 7/1/14 -- 6/30/15.
+
+| Stage    | July-Feb| Mar-Apr |   May   |  June   |
+|----------|:-------:|:-------:|:-------:|:-------:| 
+| Plan     |  1/6    | 1/8     | 0       |   0     |
+| Clear    |  1/3    | 1/6     | 1/8     |   0     |
+| Ask      |  2/3    | 1/3     | 1/6     |   1/8   |
+| Oral     |  2/3    | 1/3     | 1/6     |   1/8   |
+| Paperwork|  1      | 1       | 1       |   1     |
+
+  * How accurate is this method?
+  * Are all of these variables (expected amount, current date, expected date) predictive?
+  * Are there additional variables that will improve the model's accuracy?
+  * Is there an alternate model for $P(S_{i}=1)$ that performs better?
+
+# Data
+
+For model fitting and comparison, data was compiled on 1309 solicitations opened between 7/1/2011 and 3/15/2016 with known outcome (booked, refused, cancelled). 
+
+For initial model validation, point-in-time data was compiled from 153 historical reports run between 
+
+# Variable selection
+
+Confidence bands are based on the standard error for a binomial random variable, $\sqrt{\frac{p(1-p)}{n}}$ (assuming independence).
+
+Should treat Ask and Oral differently (AF/MG plots, with table)
