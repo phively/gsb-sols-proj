@@ -9,7 +9,7 @@ output: html_document
 
 My goal is to find a way to accurately forecast fundraising revenue.
 
-The existing model ("JMod") has two components. First, the probability a solicitation $S_{i}$ comes in before the end of the fiscal year is a function of the current stage progress $c$ and time until the end of the year $t$, $P(S_{i}=1)=f(c_{i},t)$. The expected FRP in the current fiscal year is this probability times the expected amount, $E(FRP)=P(S_{i}=1)E(S_{i})$, discounted to 0 if the expected close date is after the end of the fiscal year.
+The existing model ("JMod") has two components. First, the probability a solicitation $Sol_{i}$ is successfully booked before the end of the fiscal year is a function of the current stage progress $Stage$ and time until the end of the year $t$, $P(Sol_{i}=1)=f(Stage_{i},t)$. The expected FRP in the current fiscal year is this probability times the expected amount, $E(FRP)=P(Sol_{i}=1)E(Sol_{i})$, discounted to 0 if the expected close date is after the end of the fiscal year.
 
 The probabilities are adjusted from year to year; these were the weights used in fiscal year 2015, 7/1/14 -- 6/30/15.
 
@@ -25,7 +25,7 @@ I investigated the following:
 
   * How accurate is this method?
   * Are each of these variables (expected amount, current date, expected date) predictive?
-  * Is there an alternate model for $P(S_{i}=1)$ that performs better?
+  * Is there an alternate model for $P(Sol_{i}=1)$ that performs better?
   * Are there additional variables that will improve the model's accuracy?
 
 # Data
@@ -38,11 +38,72 @@ For initial model validation, point-in-time data was compiled from 153 historica
 
 Final model comparisons include out-of-sample data compiled from reports run between 7/1/2015 and 6/30/2016.
 
+# Model structure
+
+The most straightforward statistical model extends JMod, assuming that the probability a solicitation closes is some function of the solicitation stage and time of year $t$ -- in this case, fiscal month as a factor. The logistic regression model is:
+
+$$ logit(P(Sol_{i}=1 | Stage_{j})) = \mu_{j} + t_{i} + \epsilon_{i} $$
+
+Note that this does not include any information about expected close date. Comparing this approach to JMod using the 1309-row dataset yields the following error rates:
+
+```{r, echo=F, message=F, warning=F, cache=F}
+## Load libraries and functions
+source("Rscript0 - libraries.R")
+source("f.Wrangle.R")
+source("f.Diagnostics.R")
+source("f.JMod.R")
+## Retrieve data
+source("Rscript1a - modeling data appends.R")
+
+## Load and format the saved errors file from last time
+errors <- data.frame(read.csv("classification.errors.txt", sep="\t", stringsAsFactors=F)) %>%
+  filter(Model %in% c("JMod", "GLM")) %>%
+  arrange(desc(Model))
+## Table output
+kable(errors, digits=2)
+```
+
+These are fairly close, except that using a simple logistic regression, the Oral error rates are *much* lower. This suggests that at the least, the Ask and Oral stages should be treated differently. This can be confirmed by examining close rates in the underlying data by month and stage:
+
+```{r, echo=F, message=F, warning=F, cache=F}
+# Data manupulation
+ggdat <- mdat %>%
+  mutate(
+    GiftSize = ifelse(Ask.Amt >= 5000000, "PG",
+      ifelse(Ask.Amt >= 25000, "MG",
+      ifelse(Ask.Amt < 25000, "AF",
+      "Unasked"))),
+    Plan = as.numeric(month(Planning.Dt)),
+    Clear = as.numeric(month(Clear.Dt)),
+    Ask = as.numeric(month(Ask.Dt)),
+    Oral = as.numeric(month(Oral.Dt)),
+    Count = 1
+  ) %>%
+  select(Count, Plan, Clear, Ask, Oral, FY.Plan.Book, FY.Clear.Book, FY.Ask.Book, FY.Oral.Book, GiftSize) %>%
+  gather("Stage", "Month", 2:5, factor_key=T) %>%
+  gather("Outcome", "Booked.In.FY", 2:5) %>%
+  # Need to get rid of mismatched rows, e.g. where Stage=Ask and Outcome=FY.Clear.Book
+  filter(
+    (Stage=="Plan" & Outcome=="FY.Plan.Book") |
+    (Stage=="Clear" & Outcome=="FY.Clear.Book") |
+    (Stage=="Ask" & Outcome=="FY.Ask.Book") |
+    (Stage=="Oral" & Outcome=="FY.Oral.Book")
+  ) %>%
+  mutate(Month = factor(Month, labels=strtrim(month.name, 3))) %>%
+  group_by(GiftSize, Stage, Month, Booked.In.FY) %>%
+  summarise(Count=sum(Count)) %>%
+  na.omit()
+# Reorder months to be in fiscal order
+ggdat$Month <- factor(ggdat$Month, levels(ggdat$Month)[c(7:12,1:6)])
+# Add proportions and CIs
+ggdat <- ggdat %>% mutate(n = sum(Count), Prop = Count/n, ci = sqrt(Prop*(1-Prop)/n))
+# # Plot counts by month
+# ggplot(ggdat, aes(x=Month, y=Count, color=Booked.In.FY, group=Booked.In.FY)) + geom_point() + geom_line(alpha=.5) + facet_grid(Stage~GiftSize) + theme(text=element_text(size=12), axis.text.x=element_text(angle=90, vjust=.4))
+# Plot prop by month
+ggplot(ggdat, aes(x=Month, y=Prop, color=Booked.In.FY, fill=Booked.In.FY, group=Booked.In.FY)) + geom_point() + geom_line(alpha=.5) + geom_ribbon(aes(ymin=Prop-ci, ymax=Prop+ci), color=NA, alpha=.15) + labs(y="Percent") + theme(text=element_text(size=12), axis.text.x=element_text(angle=90, vjust=.4)) + facet_grid(Stage~GiftSize) + scale_y_continuous(labels=percent)
+```
+
+Confidence bands are based on the standard error for a binomial random variable, $\sqrt{\frac{p(1-p)}{n}}$ (assuming independence). The center column (MG) represents gifts in the $25k to $5M range and is our focus. Note that Ask and Oral do behave very differently.
+
 # Variable selection
-
-The most straightforward statistical model extends JMOD, assuming that the probability a solicitation closes is a function of the solicitation stage and 
-
-Confidence bands are based on the standard error for a binomial random variable, $\sqrt{\frac{p(1-p)}{n}}$ (assuming independence).
-
-Should treat Ask and Oral differently (AF/MG plots, with table)
 

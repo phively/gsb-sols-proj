@@ -26,13 +26,13 @@ Joe.dat2 <- Joe.dat %>% mutate(Solicitation.ID,
                                Expected.Amt = Aggregate.Expected.Amt,
                                Start.Dt = Solicit.Start.Dt,##
                                Plan.Dt = Most.Recent.Planning,##
-                               Planning.Dt = as.POSIXct(ifelse(is.na(Plan.Dt), Start.Dt, Plan.Dt), origin=origin),
+                               Planning.Dt = as.Date(as.POSIXct.Date(ifelse(is.na(Plan.Dt), Start.Dt, Plan.Dt), origin=origin)),
                                Clear.Dt = Most.Recent.Clearance,
                                Ask.Dt = Ask.Dt,
                                Ask.Amt = Aggregate.Ask.Amt,
                                Oral.Dt = Most.Recent.Oral.Pledge,
                                Stop.Dt = Solicit.Stop.Dt,##
-                               Actual.Dt = as.POSIXct(ifelse(is.na(Actual.Dt), Stop.Dt, Actual.Dt), origin=origin),
+                               Actual.Dt = as.Date(as.POSIXct.Date(ifelse(is.na(Actual.Dt), Stop.Dt, Actual.Dt), origin=origin)),
                                Actual.Amt = Aggregate.Actual.Amt,
                                Booked = substr(Final.Sol.Stage,1,2) %in% c("10","11") ) %>%
   select(Solicitation.ID, Solicitation.Type.Desc, Final.Sol.Stage.Dt, Final.Sol.Stage, Booked, Final.Sol.Mgr,
@@ -49,3 +49,4 @@ Joe.dat2$Actual.Amt[is.na(Joe.dat2$Actual.Dt) & (Joe.dat2$Actual.Amt %in% c(0,NA
 
 ## Save modeling file to disk
 write.table(Joe.dat2, file="modeling.txt", sep="\t", row.names=F)
+save(Joe.dat2, file="modeling.Rdata")

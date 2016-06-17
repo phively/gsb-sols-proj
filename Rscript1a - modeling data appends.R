@@ -2,10 +2,10 @@
 
 # Load data saved in Rscript1
 
-mdat <- read.csv("modeling.txt", sep="\t", stringsAsFactors=F)
+load("modeling.Rdata")
 
 # Include only closed solicitations with Expected under $5M
-mdat <- mdat %>% filter(as.numeric(substr(Final.Sol.Stage,1,2)) >= 10 & Expected.Amt<5000000) %>%
+mdat <- Joe.dat2 %>% filter(as.numeric(substr(Final.Sol.Stage,1,2)) >= 10 & Expected.Amt<5000000) %>%
   # Drop any solicitations where the actual date is before the start date
   mutate(plan2actual = as.numeric(difftime(Actual.Dt, Planning.Dt, units="days")),
          clear2actual = as.numeric(difftime(Actual.Dt, Clear.Dt, units="days")),

@@ -38,7 +38,7 @@ source("Rscript1 - data load and transform.R")
 Begin with some visualizations of time in each stage:
 
 ```{r, echo=F, message=F, warning=F, cache=F}
-Joe.dat2 <- read.csv("modeling.txt", sep="\t", stringsAsFactors=F)
+load("modeling.Rdata")
 
 #### Days between stages ----
 ggdat <- Joe.dat2 %>%  mutate(
@@ -92,7 +92,7 @@ colnames(mdat)
 Do I want to model time to close from each current stage $c_{i}$ as opposed to $P(S_{ij}=1)$?
 
 ```{r, echo=F, warning=F, cache=F}
-ggdat <- gather(mdat, "Stages","Days", 19:22) #gather() uses tidyr
+ggdat <- gather(mdat, "Stages","Days", 19:22, factor_key=T) #gather() uses tidyr
 ggplot(data=ggdat, aes(x=Stages, y=Days, color=Booked, fill=Booked)) + geom_boxplot(alpha=.4, position=position_dodge(width=1))
 kable(summary(mdat[,19:22]))
 ```
@@ -122,7 +122,7 @@ tmp <- mdat %>% mutate(Plan=as.numeric(month(Planning.Dt)),
   select(Count, Plan, Clear, Ask, Oral, Booked)
 
 # Convert columns into rows
-tmp2 <- gather(tmp, "Stage", "Month", 2:5) %>% mutate(Month=factor(Month, labels=strtrim(month.name, 3)))
+tmp2 <- gather(tmp, "Stage", "Month", 2:5, factor_key=T) %>% mutate(Month=factor(Month, labels=strtrim(month.name, 3)))
 tmp2$Month <- factor(tmp2$Month, levels(tmp2$Month)[c(7:12,1:6)]) #start in Jul instead of Jan
 ggdat <- tmp2 %>% group_by(Stage, Month) %>% summarise(Count=sum(Count))
 # Plot
@@ -165,7 +165,7 @@ tmp <- mdat %>% select(Planning.Dt, Clear.Dt, Ask.Dt, Oral.Dt, Booked) %>%
          OralY=YToFY(Oral.Dt), Oral=as.numeric(month(Oral.Dt))) %>%
   select(-c(1:4)) #Drop actual dates which are now unneeded
 # Spread month and year
-tmp2 <- gather(tmp, "Stage", "Month", seq(4,10,by=2)) %>% gather("StageY", "Year", 3:6) %>%
+tmp2 <- gather(tmp, "Stage", "Month", seq(4,10,by=2), factor_key=T) %>% gather("StageY", "Year", 3:6) %>%
   mutate(Month=as.factor(Month), Year=as.factor(Year)) %>%
   # Need to dedupe to get rid of mismatched rows, e.g. where Stage=Ask and StageY=PlanY
   filter((Stage=="Plan" & StageY=="PlanY") | (Stage=="Clear" & StageY=="ClearY") | (Stage=="Ask" & StageY=="AskY") | (Stage=="Oral" & StageY=="OralY")) %>% mutate(StageY=NULL)
@@ -249,7 +249,7 @@ If someone asks slightly more than the planned ask amount it's a good sign that 
 Given that a solicitation reaches a certain stage, how likely is it to close that year, whether or not it's booked?
 
 ```{r, echo=F, warning=F, cache=F}
-ggdat <- na.omit(mdat %>% mutate(Count=1) %>% group_by(FY.plan, FY.clear, FY.ask, FY.oral) %>% summarise(Count=sum(Count)) %>% gather("Stage","Closed",1:4) %>% group_by(Stage, Closed) %>% summarise(Count=sum(Count)))
+ggdat <- na.omit(mdat %>% mutate(Count=1) %>% group_by(FY.plan, FY.clear, FY.ask, FY.oral) %>% summarise(Count=sum(Count)) %>% gather("Stage","Closed",1:4,factor_key=T) %>% group_by(Stage, Closed) %>% summarise(Count=sum(Count)))
 levels(ggdat$Stage) <- c("Plan","Clear","Ask","Oral")
 # Plot of counts
 ggplot(ggdat, aes(x=Stage, y=Count, fill=Closed)) + geom_bar(stat="identity", position="dodge", alpha=.5)
@@ -262,7 +262,7 @@ kable(ggdat[,c("Stage","Closed","Count","Proportion")], digits=2)
 Ask and Clear are closer than I would have thought. What about if we look at whether they were both closed _and_ booked that year?
 
 ```{r, echo=F, warning=F, cache=F}
-ggdat <- na.omit(mdat %>% mutate(Count=1) %>% group_by(FY.Plan.Book, FY.Clear.Book, FY.Ask.Book, FY.Oral.Book) %>% summarise(Count=sum(Count)) %>% gather("Stage","Booked.In.FY",1:4) %>% group_by(Stage, Booked.In.FY) %>% summarise(Count=sum(Count)))
+ggdat <- na.omit(mdat %>% mutate(Count=1) %>% group_by(FY.Plan.Book, FY.Clear.Book, FY.Ask.Book, FY.Oral.Book) %>% summarise(Count=sum(Count)) %>% gather("Stage","Booked.In.FY",1:4,factor_key=T) %>% group_by(Stage, Booked.In.FY) %>% summarise(Count=sum(Count)))
 levels(ggdat$Stage) <- c("Plan","Clear","Ask","Oral")
 # Plot of counts
 ggplot(ggdat, aes(x=Stage, y=Count, fill=Booked.In.FY)) + geom_bar(stat="identity", position="dodge", alpha=.5)
@@ -276,7 +276,7 @@ Curious; there really doesn't seem to be a discernible difference between clear 
 
 ```{r, echo=F, warning=F, cache=F}
 # Data manupulation
-ggdat <- na.omit(mdat %>% mutate(Plan=as.numeric(month(Planning.Dt)), Clear=as.numeric(month(Clear.Dt)), Ask=as.numeric(month(Ask.Dt)), Oral=as.numeric(month(Oral.Dt)), Count=1) %>% select(Count, Plan, Clear, Ask, Oral, FY.Plan.Book, FY.Clear.Book, FY.Ask.Book, FY.Oral.Book) %>% gather("Stage", "Month", 2:5) %>% gather("Outcome", "Booked.In.FY", 2:5) %>% 
+ggdat <- na.omit(mdat %>% mutate(Plan=as.numeric(month(Planning.Dt)), Clear=as.numeric(month(Clear.Dt)), Ask=as.numeric(month(Ask.Dt)), Oral=as.numeric(month(Oral.Dt)), Count=1) %>% select(Count, Plan, Clear, Ask, Oral, FY.Plan.Book, FY.Clear.Book, FY.Ask.Book, FY.Oral.Book) %>% gather("Stage", "Month", 2:5, factor_key=T) %>% gather("Outcome", "Booked.In.FY", 2:5) %>% 
   # Need to get rid of mismatched rows, e.g. where Stage=Ask and Outcome=FY.Clear.Book
   filter((Stage=="Plan" & Outcome=="FY.Plan.Book") | (Stage=="Clear" & Outcome=="FY.Clear.Book") | (Stage=="Ask" & Outcome=="FY.Ask.Book") | (Stage=="Oral" & Outcome=="FY.Oral.Book")) %>% mutate(Month=factor(Month, labels=strtrim(month.name, 3))) %>% group_by(Stage, Month, Booked.In.FY) %>% summarise(Count=sum(Count)))
 # Reorder months to be in fiscal order
@@ -293,7 +293,7 @@ There are a couple of crossover points; January for Plan and Clear; Jan for ask 
 
 ```{r, echo=F, warning=F, cache=F}
 # Data manupulation
-ggdat <- na.omit(mdat %>% mutate(GiftSize=ifelse(Ask.Amt>=5000000,"PG",ifelse(Ask.Amt>=25000,"MG",ifelse(Ask.Amt<25000,"AF","Unasked")))) %>% mutate(Plan=as.numeric(month(Planning.Dt)), Clear=as.numeric(month(Clear.Dt)), Ask=as.numeric(month(Ask.Dt)), Oral=as.numeric(month(Oral.Dt)), Count=1) %>% select(Count, Plan, Clear, Ask, Oral, FY.Plan.Book, FY.Clear.Book, FY.Ask.Book, FY.Oral.Book, GiftSize) %>% gather("Stage", "Month", 2:5) %>% gather("Outcome", "Booked.In.FY", 2:5) %>% 
+ggdat <- na.omit(mdat %>% mutate(GiftSize=ifelse(Ask.Amt>=5000000,"PG",ifelse(Ask.Amt>=25000,"MG",ifelse(Ask.Amt<25000,"AF","Unasked")))) %>% mutate(Plan=as.numeric(month(Planning.Dt)), Clear=as.numeric(month(Clear.Dt)), Ask=as.numeric(month(Ask.Dt)), Oral=as.numeric(month(Oral.Dt)), Count=1) %>% select(Count, Plan, Clear, Ask, Oral, FY.Plan.Book, FY.Clear.Book, FY.Ask.Book, FY.Oral.Book, GiftSize) %>% gather("Stage", "Month", 2:5, factor_key=T) %>% gather("Outcome", "Booked.In.FY", 2:5) %>% 
   # Need to get rid of mismatched rows, e.g. where Stage=Ask and Outcome=FY.Clear.Book
   filter((Stage=="Plan" & Outcome=="FY.Plan.Book") | (Stage=="Clear" & Outcome=="FY.Clear.Book") | (Stage=="Ask" & Outcome=="FY.Ask.Book") | (Stage=="Oral" & Outcome=="FY.Oral.Book")) %>% mutate(Month=factor(Month, labels=strtrim(month.name, 3))) %>% group_by(GiftSize, Stage, Month, Booked.In.FY) %>% summarise(Count=sum(Count)))
 # Reorder months to be in fiscal order
@@ -303,7 +303,7 @@ ggdat <- ggdat %>% mutate(n=sum(Count), Prop=Count/n, ci=sqrt(Prop*(1-Prop)/n))
 # Plot counts by month
 ggplot(ggdat, aes(x=Month, y=Count, color=Booked.In.FY, group=Booked.In.FY)) + geom_point() + geom_line(alpha=.5) + facet_grid(Stage~GiftSize) + theme(text=element_text(size=12), axis.text.x=element_text(angle=90, vjust=.4))
 # Plot prop by month
-ggplot(ggdat, aes(x=Month, y=Prop, color=Booked.In.FY, fill=Booked.In.FY, group=Booked.In.FY)) + geom_point() + geom_line(alpha=.5) + geom_ribbon(aes(ymin=Prop-ci, ymax=Prop+ci), alpha=.15) + labs(y="Percent") + theme(text=element_text(size=12), axis.text.x=element_text(angle=90, vjust=.4)) + facet_grid(Stage~GiftSize) + scale_y_continuous(labels=percent)
+ggplot(ggdat, aes(x=Month, y=Prop, color=Booked.In.FY, fill=Booked.In.FY, group=Booked.In.FY)) + geom_point() + geom_line(alpha=.5) + geom_ribbon(aes(ymin=Prop-ci, ymax=Prop+ci), color=NA, alpha=.15) + labs(y="Percent") + theme(text=element_text(size=12), axis.text.x=element_text(angle=90, vjust=.4)) + facet_grid(Stage~GiftSize) + scale_y_continuous(labels=percent)
 ```
 
 Ha, that's more like it. Plan has a negative trend after Feb; Clear is surprisingly close to flat; Ask has a negative trend after March; Oral can't be counted on in May and June.
