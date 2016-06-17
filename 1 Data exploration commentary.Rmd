@@ -249,7 +249,7 @@ If someone asks slightly more than the planned ask amount it's a good sign that 
 Given that a solicitation reaches a certain stage, how likely is it to close that year, whether or not it's booked?
 
 ```{r, echo=F, warning=F, cache=F}
-ggdat <- na.omit(mdat %>% mutate(Count=1) %>% group_by(FY.plan, FY.clear, FY.ask, FY.oral) %>% summarise(Count=sum(Count)) %>% gather("Stage","Closed",1:4,factor_key=T) %>% group_by(Stage, Closed) %>% summarise(Count=sum(Count)))
+ggdat <- mdat %>% mutate(Count=1) %>% group_by(FY.plan, FY.clear, FY.ask, FY.oral) %>% summarise(Count=sum(Count)) %>% gather("Stage","Closed",1:4,factor_key=T) %>% group_by(Stage, Closed) %>% summarise(Count=sum(Count)) %>% na.omit()
 levels(ggdat$Stage) <- c("Plan","Clear","Ask","Oral")
 # Plot of counts
 ggplot(ggdat, aes(x=Stage, y=Count, fill=Closed)) + geom_bar(stat="identity", position="dodge", alpha=.5)
@@ -262,7 +262,7 @@ kable(ggdat[,c("Stage","Closed","Count","Proportion")], digits=2)
 Ask and Clear are closer than I would have thought. What about if we look at whether they were both closed _and_ booked that year?
 
 ```{r, echo=F, warning=F, cache=F}
-ggdat <- na.omit(mdat %>% mutate(Count=1) %>% group_by(FY.Plan.Book, FY.Clear.Book, FY.Ask.Book, FY.Oral.Book) %>% summarise(Count=sum(Count)) %>% gather("Stage","Booked.In.FY",1:4,factor_key=T) %>% group_by(Stage, Booked.In.FY) %>% summarise(Count=sum(Count)))
+ggdat <- mdat %>% mutate(Count=1) %>% group_by(FY.Plan.Book, FY.Clear.Book, FY.Ask.Book, FY.Oral.Book) %>% summarise(Count=sum(Count)) %>% gather("Stage","Booked.In.FY",1:4,factor_key=T) %>% group_by(Stage, Booked.In.FY) %>% summarise(Count=sum(Count)) %>% na.omit()
 levels(ggdat$Stage) <- c("Plan","Clear","Ask","Oral")
 # Plot of counts
 ggplot(ggdat, aes(x=Stage, y=Count, fill=Booked.In.FY)) + geom_bar(stat="identity", position="dodge", alpha=.5)

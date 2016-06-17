@@ -74,7 +74,7 @@ ConfusionMatrix <- function(models, testdata=NULL, modnames=NULL, threshold=.5, 
       print(paste("Test data dimensions", nrow(t), "*", ncol(t), sep=" "))
       print(paste("Test data type", class(t)))
     }
-    tabl <- table(truth=t[, as.character(m$formula)[2]], pred=predict(m, newdata=t, type="response") >= threshold)
+    tabl <- table(truth=t[, as.character(m$formula)[2]], pred=na.omit(predict(m, newdata=t, type="response") >= threshold))
     if (counts) {out[[i]] <- addmargins(tabl)}
     if (!counts) {out[[i]] <- signif(addmargins(prop.table(tabl)), digits)}
   }

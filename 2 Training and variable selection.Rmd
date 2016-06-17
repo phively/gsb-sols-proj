@@ -52,9 +52,9 @@ source("f.Diagnostics.R")
 ```{r, message=F, warning=F, cache=F}
 ## Model each stage by when it was asked 
 glm.pln.1 <- glm(FY.Plan.Book ~ as.factor(month(mdat$Planning.Dt)), data=mdat, family=binomial())
-glm.clr.1 <- glm(FY.Clear.Book ~ as.factor(month(mdat$Planning.Dt)), data=mdat, family=binomial())
-glm.ask.1 <- glm(FY.Ask.Book ~ as.factor(month(mdat$Planning.Dt)), data=mdat, family=binomial())
-glm.ora.1 <- glm(FY.Oral.Book ~ as.factor(month(mdat$Planning.Dt)), data=mdat, family=binomial())
+glm.clr.1 <- glm(FY.Clear.Book ~ as.factor(month(mdat$Clear.Dt)), data=mdat, family=binomial())
+glm.ask.1 <- glm(FY.Ask.Book ~ as.factor(month(mdat$Ask.Dt)), data=mdat, family=binomial())
+glm.ora.1 <- glm(FY.Oral.Book ~ as.factor(month(mdat$Oral.Dt)), data=mdat, family=binomial())
 modnames <- c("Plan","Clear","Ask","Oral")
 # Compare each of the models
 kable(CompareDeviances(models=list(glm.pln.1, glm.clr.1, glm.ask.1, glm.ora.1), modnames=modnames, debug=F), digits=3)
@@ -297,7 +297,7 @@ Finally, the GLM errors from the confusion matrix, threshold $p=0.5$, versus the
 # Put together the confusion matrices again
 confuse <- ConfusionMatrix(list(glm.pln.1, glm.clr.1, glm.ask.1, glm.ora.1), modnames=modnames, counts=F)
 # First logistic regression errors
-dat1 <- CalcErrorRates(ConfusionMatrix, model.name="GLM")
+dat1 <- CalcErrorRates(confuse, model.name="GLM")
 ## JMod errors
 dat2 <- data.frame(Model="JMod", Plan=1-sum(diag(jmod.1$errtable))/sum(jmod.1$errtable), Clear=1-sum(diag(jmod.2$errtable))/sum(jmod.2$errtable), Ask=1-sum(diag(jmod.3$errtable))/sum(jmod.3$errtable), Oral=1-sum(diag(jmod.4$errtable))/sum(jmod.4$errtable))
 ## randomForest errors

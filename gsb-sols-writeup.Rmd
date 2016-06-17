@@ -55,15 +55,34 @@ source("f.JMod.R")
 ## Retrieve data
 source("Rscript1a - modeling data appends.R")
 
-## Load and format the saved errors file from last time
-errors <- data.frame(read.csv("classification.errors.txt", sep="\t", stringsAsFactors=F)) %>%
-  filter(Model %in% c("JMod", "GLM")) %>%
-  arrange(desc(Model))
+## Error rates for JMod
+jmod.1 <- JMod(curr.stage=1, curr.dt=mdat$Planning.Dt, expected.dt=mdat$Expected.Dt)
+jmod.1$errtable <- ConfusionMatrixWeighted(preds=jmod.1$prob, truth=mdat$FY.Plan.Book, dimnames=c("truth", "pred"))
+jmod.2 <- JMod(curr.stage=2, curr.dt=mdat$Clear.Dt, expected.dt=mdat$Expected.Dt)
+jmod.2$errtable <- ConfusionMatrixWeighted(preds=na.omit(jmod.2$prob), truth=na.omit(mdat$FY.Clear.Book), dimnames=c("truth", "pred"))
+jmod.3 <- JMod(curr.stage=3, curr.dt=mdat$Ask.Dt, expected.dt=mdat$Expected.Dt)
+jmod.3$errtable <- ConfusionMatrixWeighted(preds=na.omit(jmod.3$prob), truth=na.omit(mdat$FY.Ask.Book), dimnames=c("truth", "pred"))
+jmod.4 <- JMod(curr.stage=4, curr.dt=mdat$Oral.Dt, expected.dt=mdat$Expected.Dt) # Ask and Oral are considered the same stage
+jmod.4$errtable <- ConfusionMatrixWeighted(preds=na.omit(jmod.4$prob), truth=na.omit(mdat$FY.Oral.Book), dimnames=c("truth", "pred"))
+errors <- data.frame(Model="JMod", Plan=1-sum(diag(jmod.1$errtable))/sum(jmod.1$errtable), Clear=1-sum(diag(jmod.2$errtable))/sum(jmod.2$errtable), Ask=1-sum(diag(jmod.3$errtable))/sum(jmod.3$errtable), Oral=1-sum(diag(jmod.4$errtable))/sum(jmod.4$errtable))
+
+## Error rates for basic GLM
+## Model each stage by when it was asked 
+glm.pln.1 <- glm(FY.Plan.Book ~ as.factor(month(mdat$Planning.Dt)), data=mdat, family=binomial())
+glm.clr.1 <- glm(FY.Clear.Book ~ as.factor(month(mdat$Clear.Dt)), data=mdat, family=binomial())
+glm.ask.1 <- glm(FY.Ask.Book ~ as.factor(month(mdat$Ask.Dt)), data=mdat, family=binomial())
+glm.ora.1 <- glm(FY.Oral.Book ~ as.factor(month(mdat$Oral.Dt)), data=mdat, family=binomial())
+modnames <- c("Plan","Clear","Ask","Oral")
+confuse <- ConfusionMatrix(list(glm.pln.1, glm.clr.1, glm.ask.1, glm.ora.1), modnames=modnames, counts=F)
+
+errors <- rbind(errors, CalcErrorRates(confuse, model.name="GLM"))
+
+
 ## Table output
 kable(errors, digits=2)
 ```
 
-These are fairly close, except that using a simple logistic regression, the Oral error rates are *much* lower. This suggests that at the least, the Ask and Oral stages should be treated differently. This can be confirmed by examining close rates in the underlying data by month and stage:
+These are fairly close, except that using the simple logistic regression, the Oral error rates are *much* lower. This suggests that at the least, the Ask and Oral stages should be treated differently. This can be confirmed by examining close rates in the underlying data by month and stage:
 
 ```{r, echo=F, message=F, warning=F, cache=F}
 # Data manupulation
@@ -107,3 +126,4 @@ Confidence bands are based on the standard error for a binomial random variable,
 
 # Variable selection
 
+In order to create a drop-in JMod replacement, the set of covariates should be restricted to fields already included in the monthly solicitation pipeline reports.

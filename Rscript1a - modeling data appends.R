@@ -5,13 +5,13 @@
 load("modeling.Rdata")
 
 # Include only closed solicitations with Expected under $5M
-mdat <- Joe.dat2 %>% filter(as.numeric(substr(Final.Sol.Stage,1,2)) >= 10 & Expected.Amt<5000000) %>%
+mdat <- Joe.dat2 %>% filter(as.numeric(substr(Final.Sol.Stage, 1, 2)) >= 10 & Expected.Amt < 5000000) %>%
   # Drop any solicitations where the actual date is before the start date
   mutate(plan2actual = as.numeric(difftime(Actual.Dt, Planning.Dt, units="days")),
          clear2actual = as.numeric(difftime(Actual.Dt, Clear.Dt, units="days")),
          ask2actual = as.numeric(difftime(Actual.Dt, Ask.Dt, units="days")),
          oral2actual = as.numeric(difftime(Actual.Dt, Oral.Dt, units="days"))) %>%
-  filter(plan2actual>0) %>%
+  filter(plan2actual > 0) %>%
   # Determine the EOFY at the start of each stage
   mutate(planFYE = FYE(Planning.Dt),
          clearFYE = FYE(Clear.Dt),
