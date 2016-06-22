@@ -32,11 +32,11 @@ I investigated the following:
 
 The response variable is whether a solicitation was booked by the end of the fiscal year given its state at some earlier point. Covariates include current stage, current date, expected close date, planned ask amount, etc.
 
-For model fitting and comparison, data was compiled on 1309 solicitations opened between 7/1/2011 and 3/15/2016 with known outcome (booked, refused, cancelled).
+For model fitting and comparison, data was compiled on 1089 solicitations opened and closed between 7/1/2011 and 6/30/2015 with known outcome (booked, refused, cancelled).
 
-For initial model validation, point-in-time data was compiled from 153 historical reports run between 8/1/2011 and 2/2/2016.
+For initial model validation, point-in-time data was compiled from 153 historical reports run between 8/1/2011 and 2/2/2016. One solicitation can be included in consecutive months provided that it hasn't yet closed.
 
-Final model comparisons include out-of-sample data compiled from reports run between 7/1/2015 and 6/30/2016.
+(Pending) Final model comparisons include out-of-sample data compiled from reports run between 7/1/2015 and 6/30/2016.
 
 # Model structure
 
@@ -44,7 +44,7 @@ The most straightforward statistical model extends JMod, assuming that the proba
 
 $$ logit(P(Sol_{i}=1 | Stage_{j})) = \mu_{j} + t_{i} + \epsilon_{i} $$
 
-Note that this does not include any information about expected close date. Comparing this approach to JMod using the 1309-row dataset yields the following error rates:
+Note that this does not include any information about expected close date. Comparing this approach to JMod using the 1089-row dataset (i.e. an in-sample test) yields the following error rates:
 
 ```{r, echo=F, message=F, warning=F, cache=F}
 ## Load libraries and functions
@@ -53,7 +53,11 @@ source("f.Wrangle.R")
 source("f.Diagnostics.R")
 source("f.JMod.R")
 ## Retrieve data
-source("Rscript1a - modeling data appends.R")
+source("Rscript1b - derived variables.R")
+
+## Exclude solicitations closing after 6/30/2015 so we have a fair out-of-sample comparison later
+mdat <- mdat %>% filter(Final.Sol.Stage.Dt <= mdy("06/30/2015"))
+mderived <- mderived %>% filter(Final.Sol.Stage.Dt <= mdy("06/30/2015"))
 
 ## Error rates for JMod
 jmod.1 <- JMod(curr.stage=1, curr.dt=mdat$Planning.Dt, expected.dt=mdat$Expected.Dt)
@@ -126,4 +130,215 @@ Confidence bands are based on the standard error for a binomial random variable,
 
 # Variable selection
 
-In order to create a drop-in JMod replacement, the set of covariates should be restricted to fields already included in the monthly solicitation pipeline reports.
+In order to create a drop-in JMod replacement, the set of covariates should be restricted to fields already included in the monthly solicitation pipeline reports, plus derived predictors. Compared to JMod, GLM does not use information about a solicitation's expected close date, so this is an easy choice to include.
+
+To get an idea of which covariates are most predictive, I ran them all through random forests (500 trees). We carry over stage, current fiscal month, and expected close date from JMod, and add covariates for planned ask amount, ask amount, expected amount, days between stages, and several other derived variables. Here's the out-of-bag error (similar to cross-validation) for the random forests themselves, compared to the more parsimonious models.
+
+```{r, echo=F, message=F, warning=F, cache=F}
+## Set up for Random Forests
+library(randomForest)
+set.seed(15584)
+
+## Set up headers
+## Obviously shouldn't include after-the-fact information (FY. objects, actual amount, etc.)
+head.all <- names(mderived)[names(mderived) %in% c("Solicitation.Type.Desc", "Planned.Fiscal.Mo", "Planned.Amt", "Expected.Fiscal.Mo", "Expected.Amt", "Planned.Ask.Band")]
+# Look for "plan" and "Plan" in header ([pP] = both cases), but ignore the FY. outcome objects
+head.plan <- names(mderived)[setdiff(grep("[pP]lan", names(mderived)), grep("FY.", names(mderived)))]
+head.plan <- setdiff(head.plan, c(head.all, "plan2clear")) #take out plan2clear which wouldn't have been known
+# Look for "Clear" in header
+head.clear <- names(mderived)[setdiff(grep("[cC]lear", names(mderived)), grep("FY.", names(mderived)))]
+head.clear <- setdiff(head.clear, c(head.all, "clear2ask")) #take out clear2ask which wouldn't have been known
+# Look for "Ask" in header
+head.ask <- names(mderived)[setdiff(grep("[aA]sk", names(mderived)), grep("FY.", names(mderived)))]
+head.ask <- setdiff(head.ask, c(head.all, "ask2oral")) #take out ask2oral which wouldn't have been known
+head.ask <- c(head.ask, "plan2clear") #add fields that would have been known
+# Look for "Oral" in header
+head.oral <- names(mderived)[setdiff(grep("[oO]ral", names(mderived)), grep("FY.", names(mderived)))]
+head.oral <- setdiff(head.oral, head.all)
+head.oral <- c(head.oral, "plan2clear", "clear2ask", "Ask.Amt", "Ask.Band", "Ask.Amt.Over.Pln.Amt", "Ask.Amt.Over.Pln.Fac") #add fields that would've been known
+
+## Grow forests
+# Planned stage forest
+treedat <- na.omit(mderived[,c("FY.Plan.Book", head.all, head.plan)])
+rf.plan <- randomForest(factor(FY.Plan.Book) ~ ., data=treedat, importance=T)
+# Clear stage forest
+treedat <- na.omit(mderived[,c("FY.Clear.Book", head.all, head.clear)])
+rf.clear <- randomForest(factor(FY.Clear.Book) ~ ., data=treedat, importance=T)
+# Ask stage forest
+treedat <- na.omit(mderived[,c("FY.Ask.Book", head.all, head.ask)])
+rf.ask <- randomForest(factor(FY.Ask.Book) ~ ., data=treedat, importance=T)
+# Oral stage forest
+treedat <- na.omit(mderived[,c("FY.Oral.Book", head.all, head.oral)])
+rf.oral <- randomForest(factor(FY.Oral.Book) ~ ., data=treedat, importance=T)
+
+## Recompute errors
+errors <- rbind(errors, data.frame(Model="Random forest", Plan=tail(rf.plan$err.rate[,"OOB"],1), Clear=tail(rf.clear$err.rate[,"OOB"],1), Ask=tail(rf.ask$err.rate[,"OOB"],1), Oral=tail(rf.oral$err.rate[,"OOB"],1)))
+kable(errors, digits=2)
+```
+
+This is a great result, of course, and represents something of a best-case cross-validation scenario. However, we're interested in explanation, not pure prediction, so random forests are not my first choice of model. However, they are extremely useful for variable selection. Here are the variable importances for each covariate:
+
+```{r, echo=F, message=F, warning=F, cache=F}
+## Coerce importances into a data frame
+imp.plan <- importance(rf.plan, scale=F, type=1)
+imp.clear <- importance(rf.clear, scale=F, type=1)
+imp.ask <- importance(rf.ask, scale=F, type=1)
+imp.oral <- importance(rf.oral, scale=F, type=1)
+rf.importances <- rbind(data.frame(Model="Plan", imp.plan, Variable=rownames(imp.plan)), data.frame(Model="Clear", imp.clear, Variable=rownames(imp.clear)), data.frame(Model="Ask", imp.ask, Variable=rownames(imp.ask)), data.frame(Model="Oral", imp.oral, Variable=rownames(imp.oral)), make.row.names=F)
+## Plot importances
+# y axis will end at nearest .02 above the maximum in the data
+top <- ceiling(max(rf.importances$MeanDecreaseAccuracy)*50)/50
+ggplot(rf.importances, aes(x=Variable, y=MeanDecreaseAccuracy, color=Model, group=Model)) + geom_point() + geom_line() + theme(axis.text.x=element_text(angle=90, hjust=1)) + labs(title="Random forest variable importances", y="Mean Decrease in Accuracy") + scale_y_continuous(breaks=seq(0, top, by=.02))
+```
+
+Intuitively, importance is a measure of how useful a predictor is for distinguishing between classes, so the higher on the y-axis a point falls, the better it is for prediction. Note that because each stage (color) has its own outcome variable they do not share the same predictors, but certain predictors are comparable across stages.
+
+For example, the distinctive double-peak pattern in each stage results from three variables related to the calendar date (`Stage.Future` = indicator for expected to close in the future, `stage2EOFY` = days left until the end of the current fiscal year, and `stage2expect` = days until the expected close date). These three variables are highly correlated -- because of how the forests are constructed (random branching) this means they all have high importance. Some observations from this plot and previous exploration:
+
+  * The `Stage.Future`, `stage2EOFY`, `stage.fiscal.mo`, and `stage2expect` variables are by far the most important. They are also highly correlated.
+  * Out of the four of them I would personally ditch `stage2EOFY` and consider dropping one of the `stage.fiscal.mo` or `stage2expect` variables as well.
+  * `Expected.Amt` and `Planned.Amt` are good predictors before the Oral stage; `Planned.Ask.Band` is worse across the board.
+  * `Expected.Fiscal.Mo` is important across the board, while `Planned.Fiscal.Mo` is useful before the Oral stage.
+  * Similarly, `Solicitation.Type.Desc` is a decent predictor before 
+  * The various times between stages e.g. `plan2clear` are not good predictors.
+  * `Ask.Amt` is a good predictor in the Ask stage, certainly much better than `Ask.Band`; the two `Ask.Amt.Over.` fractions are useless.
+  
+Almost equally low error can be obtained with just a few predictors:
+
+  * `Solicitation.Type.Desc`, `Planned.Amt`, and `Expected.Amt` are useful across the board
+  * `Stage.Future` and `stage.fiscal.mo` for the corresponding stages are useful
+  * `Ask.Amt` is useful in the ask and oral stages
+
+```{r, echo=F, message=F, warning=F, cache=F}
+## Update the explanatory variables
+exclude <- c("plan2EOFY", "clear2EOFY", "ask2EOFY", "oral2EOFY", "plan2clear", "clear2ask", "ask2oral", "Planned.Ask.Band", "Ask.Band", "Ask.Amt.Over.Pln.Amt", "Ask.Amt.Over.Pln.Fac", "plan2expect", "clear2expect", "ask2expect", "oral2expect", "Expected.Fiscal.Mo", "Planned.Fiscal.Mo")
+head.all <- setdiff(head.all, exclude)
+head.plan <- setdiff(head.plan, exclude)
+head.clear <- setdiff(head.clear, exclude)
+head.ask <- setdiff(head.ask, exclude)
+head.oral <- setdiff(head.oral, exclude)
+
+## Regrow trees
+## Regrow the random forests
+set.seed(48676)
+# Planned stage forest
+treedat <- na.omit(mderived[,c("FY.Plan.Book", head.all, head.plan)])
+rf.plan <- randomForest(factor(FY.Plan.Book) ~ ., data=treedat, importance=T)
+# Clear stage forest
+treedat <- na.omit(mderived[,c("FY.Clear.Book", head.all, head.clear)])
+rf.clear <- randomForest(factor(FY.Clear.Book) ~ ., data=treedat, importance=T)
+# Ask stage forest
+treedat <- na.omit(mderived[,c("FY.Ask.Book", head.all, head.ask)])
+rf.ask <- randomForest(factor(FY.Ask.Book) ~ ., data=treedat, importance=T)
+# Oral stage forest
+treedat <- na.omit(mderived[,c("FY.Oral.Book", head.all, head.oral)])
+rf.oral <- randomForest(factor(FY.Oral.Book) ~ ., data=treedat, importance=T)
+
+## randomForest errors
+errors <- rbind(errors, data.frame(Model="Random forest sm.", Plan=tail(rf.plan$err.rate[,"OOB"],1), Clear=tail(rf.clear$err.rate[,"OOB"],1), Ask=tail(rf.ask$err.rate[,"OOB"],1), Oral=tail(rf.oral$err.rate[,"OOB"],1), stringsAsFactors=F))
+## error table
+kable(errors, digits=2)
+```
+
+# Final model
+
+The variables from this "small" random forest (in terms of number of covariates, not number of trees or depth) were reintroduced into a second GLM. The final variables include solicitation stage, solicitation type, transformed planned ask amount, transformed expected amount, an indicator for solicitations expected to close in a future fiscal year, plus transformed ask amount in the ask and oral stages, when they would be known. Because dollar amounts are very right-skewed, I transformed them as follows:
+
+$$ f(x) = \text{log}_{10}(x + \alpha), \alpha = 100 $$
+
+$x = 100$ was the smallest non-zero ask amount, so $\alpha$ was set to this value.
+
+```{r, echo=F, message=F, warning=F, cache=F}
+## Data transformations
+# Function to transform dollar amounts as above
+LogTrans <- function(x, a=100) {log10(x + a)}
+# Transformed dollar amounts
+mderived <- mderived %>% mutate(lt.Planned.Amt = LogTrans(Planned.Amt), lt.Expected.Amt = LogTrans(Expected.Amt), lt.Ask.Amt = LogTrans(Ask.Amt))
+
+# Plan model, main effects only
+glm.pln.t <- glm(FY.Plan.Book ~ Sol.Type.Agg + lt.Planned.Amt + lt.Expected.Amt + Plan.Future, data=mderived, family=binomial())
+# Clear model, main effects only
+glm.clr.t <- glm(FY.Clear.Book ~ Sol.Type.Agg + lt.Planned.Amt + lt.Expected.Amt + Clear.Future, data=mderived, family=binomial())
+# Ask model, main effects only
+glm.ask.t <- glm(FY.Ask.Book ~ Sol.Type.Agg + lt.Planned.Amt + lt.Expected.Amt + lt.Ask.Amt + Ask.Future, data=mderived, family=binomial())
+# Oral model, main effects only
+glm.ora.t <- glm(FY.Oral.Book ~ Sol.Type.Agg + lt.Planned.Amt + lt.Expected.Amt + lt.Ask.Amt + Oral.Future, data=mderived, family=binomial())
+
+## Put together the error rates
+confuse <- ConfusionMatrix(list(glm.pln.t, glm.clr.t, glm.ask.t, glm.ora.t), modnames=modnames, counts=F)
+# Row to add to the error table
+errors <- rbind(errors, CalcErrorRates(confuse, model.name="GLM big", modnames))
+# Print the error table
+kable(errors, digits=2)
+```
+
+Using the variables identified by the small random forest, with a few subtractions, the "big" GLM does nearly as well (in-sample) as a random forest -- not bad at all!
+
+# Point-in-time validation
+
+```{r, echo=F, message=F, warning=F, cache=F}
+## Load point-in-time dataset
+load("pit.dat.Rdata")
+
+## Make predictions for each method
+sols3 <- na.omit(sols2 %>% select(Solicitation.ID, Curr.Stage, rpt.date, Expected.Dt, Expected.Amt, Actual.Amt, Closed.In.FY, Expect.In.Future.FY, Sol.Type.Agg, lt.Planned.Amt, lt.Expected.Amt, lt.Ask.Amt))
+## JMod predictions
+jmod.preds <- JMod(curr.stage=sols3$Curr.Stage, curr.dt=sols3$rpt.date, expected.dt=sols3$Expected.Dt, expect.amt=sols3$Expected.Amt, act.amt=sols3$Actual.Amt, closed.in.fy=sols3$Closed.In.FY)
+# Add the report date
+jmod.preds$dt <- sols3$rpt.date
+jmod.preds$id <- as.character(paste(sols3$Solicitation.ID, sols3$rpt.date, sep="."))
+jmod.preds$expect <- sols3$Expected.Amt
+jmod.preds <- data.frame(jmod.preds)
+## GLM predictions
+PredictGLM <- function(model, data){
+  data.frame(probability = predict(model, newdata=data, type="response")) %>%
+  mutate(prediction = probability * data$Expected.Amt,
+         error = prediction - ifelse(is.na(data$Actual.Amt), 0, data$Actual.Amt) * data$Closed.In.FY,
+         dt = data$rpt.date,
+         expect = data$Expected.Amt)
+}
+# Plan
+glmdat <- sols3 %>% filter(Curr.Stage == 1) %>% mutate(FY.Plan.Book = Closed.In.FY, Plan.Future = Expect.In.Future.FY)
+plan.preds <- PredictGLM(glm.pln.t, glmdat)
+# Clear
+glmdat <- sols3 %>% filter(Curr.Stage == 2) %>% mutate(FY.Clear.Book = Closed.In.FY, Clear.Future = Expect.In.Future.FY)
+clear.preds <- PredictGLM(glm.clr.t, glmdat)
+# Ask
+glmdat <- sols3 %>% filter(Curr.Stage == 3) %>% mutate(FY.Ask.Book = Closed.In.FY, Ask.Future = Expect.In.Future.FY)
+ask.preds <- PredictGLM(glm.ask.t, glmdat)
+# Oral
+glmdat <- sols3 %>% filter(Curr.Stage == 4) %>% mutate(FY.Oral.Book = Closed.In.FY, Oral.Future = Expect.In.Future.FY)
+oral.preds <- PredictGLM(glm.ora.t, glmdat)
+# Combine
+glm.preds <- rbind(plan.preds, clear.preds, ask.preds, oral.preds)
+
+## Ignore gifts over $5M
+x <- 5000000
+
+## Set up comparison data frame
+ggdat <- filter(jmod.preds, expect < x) %>% mutate(dt = DateToNthOfMonth(dt, n=1)) %>% group_by(dt) %>% summarise(pred = sum(prediction), act = sum(actual))
+## Reformat glm predictions
+tmpdf <- filter(glm.preds, expect < x) %>% mutate(dt = DateToNthOfMonth(dt, n=1)) %>% group_by(dt) %>% summarise(glm.pred = sum(prediction))
+## Bind tmpdf to ggdat
+ggdat <- left_join(ggdat, tmpdf, by = "dt")
+
+## Bootstrapped GLM dataset
+set.seed(2358)
+rep <- 1000
+boot.result <- matrix(0, nrow = nrow(glm.preds), ncol = rep)
+for (i in 1:rep) {
+  boot.result[, i] <- (glm.preds$probability >= runif(n=nrow(glm.preds), min=0, max=1)) * glm.preds$expect
+}
+glm.boot <- cbind(glm.preds, data.frame(boot.result))
+# Summarise by date across every bootstrapped dataset
+glm.boot <- filter(glm.boot, expect < x) %>% mutate(dt = DateToNthOfMonth(dt, n=1)) %>% group_by(dt) %>% summarise_each(funs(sum))
+# Find empirical 2.5th, 50th, and 97.5th percentiles (95% CI)
+boot.names <- paste("X", 1:rep, sep="")
+ggdat <- cbind(ggdat, t(apply(glm.boot[, boot.names], MARGIN=1, FUN=quantile, probs=c(.025, .5, .975))))
+
+## Plot the comparison
+ggplot(data=ggdat, aes(x=dt, y=act)) + geom_point(aes(color="Actual")) + geom_line(aes(color="Actual"), size=1.5, alpha=.5) + geom_point(aes(y=pred, color="JMod")) + geom_line(aes(y=pred, color="JMod")) + geom_point(aes(y=glm.pred, color="GLM big")) + geom_line(aes(y=glm.pred, color="GLM big")) + scale_y_continuous(name="Amount", labels=scales::dollar) + scale_x_date(name="Date", date_minor_breaks="month") + geom_ribbon(aes(ymin=`2.5%`, ymax=`97.5%`), fill="green", alpha=.1) + labs(title=paste("Solicitations under", dollar(x), "with 95% GLM CI"))
+```
+
+# Out-of-sample validation
+

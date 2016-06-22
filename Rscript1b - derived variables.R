@@ -61,7 +61,7 @@ mderived <- mdat %>% mutate(
 	  "Other"))
 	),
 	# Remove variables not needed for modeling or ID
-	Final.Sol.Stage.Dt = NULL,
+#	Final.Sol.Stage.Dt = NULL,
 	Final.Sol.Stage = NULL,
 	Booked = NULL,
 	Solicit.Dt.Added = NULL,

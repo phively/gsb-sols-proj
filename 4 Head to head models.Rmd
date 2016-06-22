@@ -89,6 +89,7 @@ sols2 <- sols2 %>% mutate(
 ## Select needed fields
 sols2 <- sols2 %>% select(Solicitation.ID, Final.Sol.Stage, Solicitation.Stage.Desc, Curr.Stage, filename, rpt.date, Expected.Dt, Planned.Ask.Amt, Ask.Amt, Expected.Amt, Actual.Amt, Actual.Amt.In.FY, Closed.In.FY, Sol.Type.Agg, lt.Planned.Amt, lt.Expected.Amt, lt.Ask.Amt, Expected.Dt, Expect.In.Future.FY)
 write.table(sols2, file="pit-dat.txt", sep="\t", row.names=F)
+save(sols2, file="pit.dat.Rdata")
 ```
 
 # Comparisons
