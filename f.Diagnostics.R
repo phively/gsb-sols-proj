@@ -73,8 +73,10 @@ ConfusionMatrix <- function(models, testdata=NULL, modnames=NULL, threshold=.5, 
     if (debug) {
       print(paste("Test data dimensions", nrow(t), "*", ncol(t), sep=" "))
       print(paste("Test data type", class(t)))
+      print(length(t[, as.character(m$formula)[2]]))
+      print(length(na.omit(predict(m, newdata=t, type="response") >= threshold)))
     }
-    tabl <- table(truth=t[, as.character(m$formula)[2]], pred=na.omit(predict(m, newdata=t, type="response") >= threshold))
+    tabl <- table(truth=na.omit(t[, as.character(m$formula)[2]]), pred=na.omit(predict(m, newdata=t, type="response") >= threshold))
     if (counts) {out[[i]] <- addmargins(tabl)}
     if (!counts) {out[[i]] <- signif(addmargins(prop.table(tabl)), digits)}
   }

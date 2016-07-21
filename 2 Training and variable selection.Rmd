@@ -326,7 +326,7 @@ ggplot(rf.importances, aes(x=Variable, y=MeanDecreaseAccuracy, color=Model, grou
 * Out of the four of them I would personally ditch `stage2EOFY` and consider dropping one of the `stage.fiscal.mo` or `stage2expect` variables as well.
 * `Expected.Amt` and `Planned.Amt` are good predictors before the Oral stage; `Planned.Ask.Band` is worse across the board.
 * `Expected.Fiscal.Mo` is important across the board, while `Planned.Fiscal.Mo` is useful before the Oral stage.
-* Similarly, `Solicitation.Type.Desc` is a decent predictor before 
+* Similarly, `Solicitation.Type.Desc` is a decent predictor before the oral stage.
 * The various times between stages e.g. `plan2clear` are not good predictors.
 * `Ask.Amt` is a good predictor in the Ask stage, certainly much better than `Ask.Band`; the two `Ask.Amt.Over.` fractions are useless.
 

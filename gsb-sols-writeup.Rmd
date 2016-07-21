@@ -199,7 +199,7 @@ For example, the distinctive double-peak pattern in each stage results from thre
   * Out of the four of them I would personally ditch `stage2EOFY` and consider dropping one of the `stage.fiscal.mo` or `stage2expect` variables as well.
   * `Expected.Amt` and `Planned.Amt` are good predictors before the Oral stage; `Planned.Ask.Band` is worse across the board.
   * `Expected.Fiscal.Mo` is important across the board, while `Planned.Fiscal.Mo` is useful before the Oral stage.
-  * Similarly, `Solicitation.Type.Desc` is a decent predictor before 
+  * Similarly, `Solicitation.Type.Desc` is a decent predictor before the oral stage.
   * The various times between stages e.g. `plan2clear` are not good predictors.
   * `Ask.Amt` is a good predictor in the Ask stage, certainly much better than `Ask.Band`; the two `Ask.Amt.Over.` fractions are useless.
   
@@ -274,7 +274,48 @@ kable(errors, digits=2)
 
 Using the variables identified by the small random forest, with a few subtractions, the "big" GLM does nearly as well (in-sample) as a random forest -- not bad at all!
 
+Finally, here are the error rates using the withheld FY16 data:
+
+```{r, echo=F, message=F, warning=F, cache=F}
+## Import new data
+datafile <- "2016-07-12 Booth solicitation history.csv" # filename for data
+source("Rscript1.Merge.R")
+## Take only solicitations closing between 7/1/2015 and 6/30/2016 for our out-of-sample comparison
+mdat <- mdat %>% filter(Final.Sol.Stage.Dt >= mdy("07/01/2015")) %>% filter(Final.Sol.Stage.Dt <= mdy("06/30/2016"))
+mderived <- mderived %>% filter(Final.Sol.Stage.Dt >= mdy("07/01/2015")) %>% filter(Final.Sol.Stage.Dt <= mdy("06/30/2016"))
+# Add needed fields for GLM
+mderived <- mderived %>% mutate(lt.Planned.Amt = LogTrans(Planned.Amt), lt.Expected.Amt = LogTrans(Expected.Amt), lt.Ask.Amt = LogTrans(Ask.Amt))
+confuse2 <- ConfusionMatrix(list(glm.pln.t, glm.clr.t, glm.ask.t, glm.ora.t), testdata=mderived, modnames=modnames, counts=F)
+# Final error calculations
+# Print the error table
+kable(CalcErrorRates(confuse2, model.name="GLM OOS", modnames), digits=2)
+```
+
+The out-of-sample error is very much in line with the in-sample error, as hoped. Here are the models with coefficients. Note that dollar amounts are log transformed with an offset, as defined above.
+
+### Plan stage
+```{r, echo=F, message=F, warning=F, cache=F}
+kable(summary(glm.pln.t)$coef, digits=3)
+```
+
+### Clear stage
+```{r, echo=F, message=F, warning=F, cache=F}
+kable(summary(glm.clr.t)$coef, digits=3)
+```
+
+### Ask stage
+```{r, echo=F, message=F, warning=F, cache=F}
+kable(summary(glm.ask.t)$coef, digits=3)
+```
+
+### Oral stage
+```{r, echo=F, message=F, warning=F, cache=F}
+kable(summary(glm.ora.t)$coef, digits=3)
+```
+
 # Point-in-time validation
+
+Now that we have a satisfactory model, JMod and GLM can be compared side-by-side on historical point-in-time data.
 
 ```{r, echo=F, message=F, warning=F, cache=F}
 ## Load point-in-time dataset
@@ -340,5 +381,7 @@ ggdat <- cbind(ggdat, t(apply(glm.boot[, boot.names], MARGIN=1, FUN=quantile, pr
 ggplot(data=ggdat, aes(x=dt, y=act)) + geom_point(aes(color="Actual")) + geom_line(aes(color="Actual"), size=1.5, alpha=.5) + geom_point(aes(y=pred, color="JMod")) + geom_line(aes(y=pred, color="JMod")) + geom_point(aes(y=glm.pred, color="GLM big")) + geom_line(aes(y=glm.pred, color="GLM big")) + scale_y_continuous(name="Amount", labels=scales::dollar) + scale_x_date(name="Date", date_minor_breaks="month") + geom_ribbon(aes(ymin=`2.5%`, ymax=`97.5%`), fill="green", alpha=.1) + labs(title=paste("Solicitations under", dollar(x), "with 95% GLM CI"))
 ```
 
-# Out-of-sample validation
+The dots are observations and the connecting lines are point estimates for each method. The green shaded GLM confidence bands are simulated, obtained by treating each solicitation as a Bernoulli trial with probability to close $p$ as predicted by the model. 1000 trials were performed per solicitation, and results in the same month and trial were summed together. The confidence bands cover the observed .025 and .975 quantiles of the sum.
+
+GLM is clearly superior until the beginning of 2014; after that it's more of a toss-up. The dataset did not include any solicitations closing after 2/2/2016, so I compiled some more historical data and re-created this plot using all available FY16 data.
 
