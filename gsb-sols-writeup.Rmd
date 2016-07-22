@@ -315,7 +315,7 @@ kable(summary(glm.ora.t)$coef, digits=3)
 
 # Point-in-time validation
 
-Now that we have a satisfactory model, JMod and GLM can be compared side-by-side on historical point-in-time data.
+Now that we have a satisfactory model, JMod and GLM can be compared side-by-side against historical point-in-time data.
 
 ```{r, echo=F, message=F, warning=F, cache=F}
 ## Load point-in-time dataset
@@ -383,5 +383,7 @@ ggplot(data=ggdat, aes(x=dt, y=act)) + geom_point(aes(color="Actual")) + geom_li
 
 The dots are observations and the connecting lines are point estimates for each method. The green shaded GLM confidence bands are simulated, obtained by treating each solicitation as a Bernoulli trial with probability to close $p$ as predicted by the model. 1000 trials were performed per solicitation, and results in the same month and trial were summed together. The confidence bands cover the observed .025 and .975 quantiles of the sum.
 
-GLM is clearly superior until the beginning of 2014; after that it's more of a toss-up. The dataset did not include any solicitations closing after 2/2/2016, so I compiled some more historical data and re-created this plot using all available FY16 data.
+GLM is clearly superior until the beginning of 2015; after that it's more of a toss-up. The dataset did not include any solicitations closing after 2/2/2016, so I compiled some more historical data and re-created this plot using all available FY16 data.
 
+```{r, echo=F, message=F, warning=F, cache=F}
+```
