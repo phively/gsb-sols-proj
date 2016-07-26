@@ -101,6 +101,7 @@ merged.dat <- merged.dat %>% mutate(
 )
 # Choose either actual date if available, or final sol stage date if not
 merged.dat$Final.Dt[is.na(merged.dat$Final.Dt)] <- merged.dat$Final.Sol.Stage.Dt[is.na(merged.dat$Final.Dt)]
+merged.dat$Final.Dt[!(merged.dat$Final.Sol.Stage %in% c("10. Yes - Gift Booked", "12. Donor Refused", "14. Cancelled/Withdrawn"))] <- ymd("9999/01/01")
 merged.dat <- merged.dat %>% mutate(
   diff = difftime(Final.Dt, FYE.Dt, units="days"),
   Resolved.In.FY = diff <= 0,
@@ -109,15 +110,15 @@ merged.dat <- merged.dat %>% mutate(
 
 sols2 <- merged.dat %>% select(Solicitation.ID, Final.Sol.Stage, Solicitation.Stage.Desc, filename, rpt.date, Expected.Dt, Expected.Amt, Actual.Amt, Resolved.In.FY, Closed.In.FY, Solicitation.Type.Desc, Planned.Ask.Amt, Ask.Amt)
 
-## Impute any missing values from mdat
+## Impute any missing values from Joe.dat2
 # Expected
-sols2$Expected.Amt[is.na(sols2$Expected.Amt)] <- left_join(sols2[is.na(sols2$Expected.Amt), c("Solicitation.ID", "Expected.Amt")], mdat[, c("Solicitation.ID", "Expected.Amt")], by="Solicitation.ID")[, 3]
+sols2$Expected.Amt[is.na(sols2$Expected.Amt)] <- unlist(left_join(sols2[is.na(sols2$Expected.Amt), c("Solicitation.ID", "Expected.Amt")], Joe.dat2[, c("Solicitation.ID", "Final.Expected.Amt")], by="Solicitation.ID")[, 3])
 # Actual
-sols2$Actual.Amt[is.na(sols2$Actual.Amt)] <- left_join(sols2[is.na(sols2$Actual.Amt), c("Solicitation.ID", "Actual.Amt")], mdat[, c("Solicitation.ID", "Actual.Amt")], by="Solicitation.ID")[, 3]
+sols2$Actual.Amt[is.na(sols2$Actual.Amt)] <- unlist(left_join(sols2[is.na(sols2$Actual.Amt), c("Solicitation.ID", "Actual.Amt")], Joe.dat2[, c("Solicitation.ID", "Actual.Amt")], by="Solicitation.ID")[, 3])
 # Planned
-sols2$Planned.Ask.Amt[is.na(sols2$Planned.Ask.Amt)] <- left_join(sols2[is.na(sols2$Planned.Ask.Amt), c("Solicitation.ID", "Planned.Ask.Amt")], mdat[, c("Solicitation.ID", "Planned.Amt")], by="Solicitation.ID")[, 3]
+sols2$Planned.Ask.Amt[is.na(sols2$Planned.Ask.Amt)] <- unlist(left_join(sols2[is.na(sols2$Planned.Ask.Amt), c("Solicitation.ID", "Planned.Ask.Amt")], Joe.dat2[, c("Solicitation.ID", "Final.Planned.Amt")], by="Solicitation.ID")[, 3])
 # Ask
-sols2$Ask.Amt[is.na(sols2$Ask.Amt)] <- left_join(sols2[is.na(sols2$Ask.Amt), c("Solicitation.ID", "Ask.Amt")], mdat[, c("Solicitation.ID", "Ask.Amt")], by="Solicitation.ID")[, 3]
+sols2$Ask.Amt[is.na(sols2$Ask.Amt)] <- unlist(left_join(sols2[is.na(sols2$Ask.Amt), c("Solicitation.ID", "Ask.Amt")], Joe.dat2[, c("Solicitation.ID", "Final.Ask.Amt")], by="Solicitation.ID")[, 3])
 ## Create derived fields
 sol.stage <- substr(sols2$Solicitation.Stage.Desc, 1, 2)
 sols2 <- sols2 %>% mutate(
@@ -143,7 +144,9 @@ sols2 <- sols2 %>% mutate(
   Actual.Amt.In.FY = Actual.Amt * Closed.In.FY,
   Expect.In.Future.FY = Expected.Dt > FYE(rpt.date)
 )
-## Select needed fields
-sols2 <- sols2 %>% select(Solicitation.ID, Final.Sol.Stage, Solicitation.Stage.Desc, Curr.Stage, filename, rpt.date, Expected.Dt, Planned.Ask.Amt, Ask.Amt, Expected.Amt, Actual.Amt, Actual.Amt.In.FY, Closed.In.FY, Sol.Type.Agg, lt.Planned.Amt, lt.Expected.Amt, lt.Ask.Amt, Expected.Dt, Expect.In.Future.FY)
 
-## Save modeling file to disk
+## Select needed fields
+sols2 <- sols2 %>% filter(Resolved.In.FY) %>% select(Solicitation.ID, Final.Sol.Stage, Solicitation.Stage.Desc, Curr.Stage, filename, rpt.date, Expected.Dt, Planned.Ask.Amt, Ask.Amt, Expected.Amt, Actual.Amt, Actual.Amt.In.FY, Closed.In.FY, Sol.Type.Agg, lt.Planned.Amt, lt.Expected.Amt, lt.Ask.Amt, Expected.Dt, Expect.In.Future.FY)
+
+## Save to disk
+write.table(sols2, "pit-fy16.txt", row.names=F, sep="\t")
