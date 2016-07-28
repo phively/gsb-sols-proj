@@ -1,12 +1,12 @@
 #### Iterate through the sub-folder, loading files as data frames ----
 
 ## List of filenames in CSV directory
-files <- list.files(path="CSV data", pattern="*.csv")
+files <- list.files(path=folder, pattern="*.csv")
 
 ## Each list item contains one file's contents
 contents <- list()
 for(f in files){
-  test <- read.csv(file=paste("CSV data\\",f, sep=""), header=T, stringsAsFactors=F)
+  test <- read.csv(file=paste(folder, "\\", f, sep=""), header=T, stringsAsFactors=F)
   ## Drop NA Sol ID rows
   test <- Renamer(test, "SOL.ID", "Solicitation.ID")
   test <- filter(test, !is.na(Solicitation.ID))
