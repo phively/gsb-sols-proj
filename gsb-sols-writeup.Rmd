@@ -36,7 +36,7 @@ For model fitting and comparison, data was compiled on 1089 solicitations opened
 
 For initial model validation, point-in-time data was compiled from 153 historical reports run between 8/1/2011 and 2/2/2016. One solicitation can be included in consecutive months provided that it hasn't yet closed.
 
-(Pending) Final model comparisons include out-of-sample data compiled from reports run between 7/1/2015 and 6/30/2016.
+Final model comparisons include out-of-sample data compiled from reports run between 7/1/2015 and 6/30/2016.
 
 # Model structure
 
@@ -527,3 +527,90 @@ SideBySidePlots(50000000)
 Some of the principal gifts have been in the works since FY14 and didn't come in until FY16. As a result, GLM overestimated dollars booked in FY14 and FY15, but was almost spot on in FY16.
 
 In summary, this model does very well predicting probabilities that a solicitation will close, but not the expected solicitation. Formulated statistically, recall that $E(FRP)=\sum_{i} P(Sol_{i}=1)E(Sol_{i})$. From the first part, $P(Sol_{i}=1)$ is accurate, but as seem from the point-in-time charts, multiplying this probability by $E(Sol_{i})$ is not a good model for $E(FRP)$. An alternate approach is to try to model $E(FRP)$ directly; depending on the method, this could be guaranteed to be statistically unbiased.
+
+# JMod tweaking
+
+In the past, JMod was tweaked at the end of the year based on how it had over- or under-estimated dollars booked. In comparing JMod to the basic GLM considering only stage and month, I noted two big opportunities:
+
+1. The ask and oral stages need to be treated differently.
+2. MG $(\$25\text{k} <= X < \$5\text{M})$ and PG $(\$5\text{M} < X)$ need to be treated differently.
+
+I'll test each of the following easy-to-implement tweaks on the compiled data:
+
+1. Fixed Oral discounting of 2/3 across the board
+2. Fixed oral discounting of 2/3 across the board, and set post-April discounts to their April values
+2. Same as #1, but exclude PG solicitations
+4. Same as #2, but exclude PG solicitations
+
+```{r, echo=F, message=F, warning=F, cache=F}
+## Original method
+jmod.preds <- JMod(curr.stage=sols3$Curr.Stage, curr.dt=sols3$rpt.date, expected.dt=sols3$Expected.Dt, expect.amt=sols3$Expected.Amt, act.amt=sols3$Actual.Amt, closed.in.fy=sols3$Closed.In.FY) %>% data.frame() %>%
+  mutate(dt = sols3$rpt.date, expect = sols3$Expected.Amt)
+jmod.preds$id <- sols3$id
+## Method 1
+jmod.preds.1 <- JMod_Oral(curr.stage=sols3$Curr.Stage, curr.dt=sols3$rpt.date, expected.dt=sols3$Expected.Dt, expect.amt=sols3$Expected.Amt, act.amt=sols3$Actual.Amt, closed.in.fy=sols3$Closed.In.FY) %>% data.frame() %>% select(jm1.prediction = prediction)
+## Method 2
+jmod.preds.2 <- JMod_Oral_2step(curr.stage=sols3$Curr.Stage, curr.dt=sols3$rpt.date, expected.dt=sols3$Expected.Dt, expect.amt=sols3$Expected.Amt, act.amt=sols3$Actual.Amt, closed.in.fy=sols3$Closed.In.FY) %>% data.frame() %>% select(jm2.prediction = prediction)
+## Method 5
+jmod.preds.5 <- JMod_Oral_2step_75(curr.stage=sols3$Curr.Stage, curr.dt=sols3$rpt.date, expected.dt=sols3$Expected.Dt, expect.amt=sols3$Expected.Amt, act.amt=sols3$Actual.Amt, closed.in.fy=sols3$Closed.In.FY) %>% data.frame() %>% select(jm5.prediction = prediction)
+
+## Combine
+jmod.preds <- jmod.preds %>% bind_cols(jmod.preds.1) %>% bind_cols(jmod.preds.2) %>% bind_cols(jmod.preds.5)
+jmod.preds <- full_join(jmod.preds, glm.preds %>% select(glm.pred = prediction, id), by="id")
+
+## Summarized data, any solicitation amount
+ggdat1 <- jmod.preds %>% mutate(dt = DateToNthOfMonth(dt, n=1)) %>% group_by(dt) %>% summarise(pred = sum(prediction), pred1 = sum(jm1.prediction), pred2 = sum(jm2.prediction), pred5 = sum(jm5.prediction), glm.pred = sum(glm.pred), act = sum(actual))
+
+## Summarized data, sub-$5M only
+ggdat2 <- filter(jmod.preds, expect < 5000000) %>% mutate(dt = DateToNthOfMonth(dt, n=1)) %>% group_by(dt) %>% summarise(pred = sum(prediction), pred1 = sum(jm1.prediction), pred2 = sum(jm2.prediction), pred5 = sum(jm5.prediction), glm.pred = sum(glm.pred), act = sum(actual))
+
+## JMod point-in-time plots, any solicitation amount
+ggplot(data=ggdat1, aes(x=dt, y=act)) + geom_point(aes(color="Actual")) + geom_line(aes(color="Actual"), size=1.5, alpha=.5) + geom_point(aes(y=glm.pred, color="GLM")) + geom_line(aes(y=glm.pred, color="GLM")) + geom_point(aes(y=pred, color="JMod")) + geom_line(aes(y=pred, color="JMod")) + geom_point(aes(y=pred1, color="JMod #1")) + geom_line(aes(y=pred1, color="JMod #1"), alpha=.5) + geom_point(aes(y=pred2, color="JMod #2")) + geom_line(aes(y=pred2, color="JMod #2"), alpha=.5) + scale_y_continuous(name="Amount", labels=scales::dollar) + scale_x_date(name="Date", date_minor_breaks="month") + labs(title="JMod methods comparison, any solicitation amount")
+
+## JMod point-in-time plots, sub-$5M only
+ggplot(data=ggdat2, aes(x=dt, y=act)) + geom_point(aes(color="Actual")) + geom_line(aes(color="Actual"), size=1.5, alpha=.5) + geom_point(aes(y=glm.pred, color="GLM")) + geom_line(aes(y=glm.pred, color="GLM")) + geom_point(aes(y=pred, color="JMod")) + geom_line(aes(y=pred, color="JMod")) + geom_point(aes(y=pred1, color="JMod #3")) + geom_line(aes(y=pred1, color="JMod #3"), alpha=.5) + geom_point(aes(y=pred2, color="JMod #4")) + geom_line(aes(y=pred2, color="JMod #4"), alpha=.5) + scale_y_continuous(name="Amount", labels=scales::dollar) + scale_x_date(name="Date", date_minor_breaks="month") + labs(title="JMod methods comparison, solicitations up to $5M")
+```
+
+These tweaks around the edges are clearly beneficial, but honestly they barely make a difference to the overall predictions. The JMod variants are just a little less negatively biased at the end of each year.
+
+Let's try one more tweak: using a less-aggressive oral stage discounting (75%).
+
+5. Fixed oral discounting of 3/4 across the board, and set post-April discounts to their April values
+6. Same as #5, but exclude PG solicitations
+
+```{r, echo=F, message=F, warning=F, cache=F}
+## JMod point-in-time plots, any solicitation amount
+ggplot(data=ggdat1, aes(x=dt, y=act)) + geom_point(aes(color="Actual")) + geom_line(aes(color="Actual"), size=1.5, alpha=.5) + geom_point(aes(y=glm.pred, color="GLM")) + geom_line(aes(y=glm.pred, color="GLM")) + geom_point(aes(y=pred, color="JMod")) + geom_line(aes(y=pred, color="JMod")) + geom_point(aes(y=pred5, color="JMod #5")) + geom_line(aes(y=pred5, color="JMod #5"), alpha=.5) + scale_y_continuous(name="Amount", labels=scales::dollar) + scale_x_date(name="Date", date_minor_breaks="month") + labs(title="JMod methods comparison, any solicitation amount")
+
+## JMod point-in-time plots, sub-$5M only
+ggplot(data=ggdat2, aes(x=dt, y=act)) + geom_point(aes(color="Actual")) + geom_line(aes(color="Actual"), size=1.5, alpha=.5) + geom_point(aes(y=glm.pred, color="GLM")) + geom_line(aes(y=glm.pred, color="GLM")) + geom_point(aes(y=pred, color="JMod")) + geom_line(aes(y=pred, color="JMod")) + geom_point(aes(y=pred5, color="JMod #6")) + geom_line(aes(y=pred5, color="JMod #6"), alpha=.5) + scale_y_continuous(name="Amount", labels=scales::dollar) + scale_x_date(name="Date", date_minor_breaks="month") + labs(title="JMod methods comparison, solicitations up to $5M")
+```
+
+Again, it's hard to see much of a difference outside the last few months of each year. Here's a summary of the count of solicitations expected in the current fiscal year by stage, on average:
+
+```{r, echo=F, message=F, warning=F, cache=F}
+tmp <- sols3 %>% mutate(
+  Stage = factor(Curr.Stage, label=c("Plan", "Clear", "Ask", "Oral", "Paperwork")),
+  Month = month(rpt.date) %>% factor(labels=strtrim(month.name, 3)),
+  Year = rpt.date %>% YToFY()) %>%
+  filter(!Expect.In.Future.FY)
+tmp$Month <- factor(tmp$Month, levels(tmp$Month)[c(7:12,1:6)])
+
+ggdat <- tmp %>% select(Stage, Month) %>% mutate(Count = 1) %>% group_by(Stage, Month) %>% summarise(Count = sum(Count)/length(table(tmp$Year)))
+
+ggdat %>% ggplot(aes(x=Month, y=Count, color=Stage, group=Stage)) + geom_point(alpha=.5) + geom_line(alpha=.5) + labs(title="Mean yearly count of expected solicitations by month")
+
+#ggdat %>% select(Count, Month, Stage) %>% xtabs(Count ~ Stage + Month, data=.) %>% kable()
+```
+
+And the associated expected dollar amounts:
+
+```{r, echo=F, message=F, warning=F, cache=F}
+ggdat <- tmp %>% group_by(Stage, Month) %>% summarise(Amount = sum(Expected.Amt)/length(table(tmp$Year)))
+
+ggdat %>% ggplot(aes(x=Month, y=Amount, color=Stage, group=Stage)) + geom_point(alpha=.5) + geom_line(alpha=.5) + scale_y_log10(labels=scales::dollar, breaks=10^(0:7)) + labs(title="Mean yearly sum of expected amounts by month")
+
+#ggdat %>% select(Amount, Month, Stage) %>% xtabs(Amount ~ Stage + Month, data=.) %>% kable()
+```
+
+Looking at the dollar amounts, tweaks to Oral just won't have much of an impact, and looking at the counts and dollar amounts, tweaks to Plan and Clear from February on won't have much of an impact either.
