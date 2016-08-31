@@ -614,3 +614,43 @@ ggdat %>% ggplot(aes(x=Month, y=Amount, color=Stage, group=Stage)) + geom_point(
 ```
 
 Looking at the dollar amounts, tweaks to Oral just won't have much of an impact, and looking at the counts and dollar amounts, tweaks to Plan and Clear from February on won't have much of an impact either.
+
+# Directly modeling dollar amounts
+
+The preferred method for finding $E(FRP)$ is to model it directly. This is challenging given the right-skewness of `Actual.Amt` and large number of zero values.
+
+```{r, echo=F, message=F, warning=F, cache=F}
+# Untransformed, < $1M
+mderived %>% filter(Actual.Amt < 1000000) %>% ggplot(aes(x=Actual.Amt, y=..density..)) + geom_histogram(alpha=.5, bins=25) + geom_density() + scale_x_continuous(labels=scales::dollar) + labs(title="Density of solicitation actual amount (under $1M)")
+# Log transformed; remove $0 amounts
+mderived %>% filter(Actual.Amt > 0) %>% ggplot(aes(x=Actual.Amt, y=..density..)) + geom_histogram(alpha=.5, bins=25) + geom_density() + scale_x_log10(labels=scales::dollar) + labs(title=expression(paste("Density of ", log[10], " solicitation actual amount")))
+```
+
+The $\text{log}_{10}$ transformation is nearly symmetric after excluding the $0 amounts, but it's unreasonable not to consider them in the analysis. Two possibilities:
+
+1. Model the expected solicitation close amount $E(Sol_{i}\text{ value}|Sol_{i}\text{ closed})$ rather than taking `Expected.Amt` at face value.
+2. Log transform the data, map all negative values to 0, and use a model such as the Tobit that allows for censored data.
+
+### Modeling close amounts
+
+```{r, echo=F, message=F, warning=F, cache=F}
+# Censored log transformation
+log_censor <- function(x, base=exp(1)) {
+  x <- ifelse(log(x, base=base) > 0, log(x, base=base), 0)
+  return(x)
+}
+
+# Data setup
+mderived <- mderived %>% mutate(Actual.Amt.lt = Actual.Amt %>% log_censor(base=10))
+# Random sample of dataset
+lmdat <- mderived %>% filter(Actual.Amt > 0)
+set.seed(1053622)
+rand <- sample(1:nrow(lmdat), size=nrow(lmdat))
+
+# Model
+lm.sol.close <- lmdat %>% lm(Actual.Amt.lt ~ lt.Planned.Amt + lt.Expected.Amt + Sol.Type.Agg, data=.)
+summary(lm.sol.close)
+
+lm.sol.preds <- predict(lm.sol.close, newdata=mderived)
+#plot(mderived$Actual.Amt.lt ~ lm.sol.preds); abline(0,1)
+```
