@@ -84,7 +84,6 @@ confuse <- ConfusionMatrix(list(glm.pln.1, glm.clr.1, glm.ask.1, glm.ora.1), mod
 
 errors <- rbind(errors, CalcErrorRates(confuse, model.name="GLM"))
 
-
 ## Table output
 kable(errors, digits=2)
 ```
@@ -620,6 +619,8 @@ Looking at the dollar amounts, tweaks to Oral just won't have much of an impact,
 The preferred method for finding $E(FRP)$ is to model it directly. This is challenging given the right-skewness of `Actual.Amt` and large number of zero values.
 
 ```{r, echo=F, message=F, warning=F, cache=F}
+# Re-import mderived
+source("Rscript1.Merge.R")
 # Untransformed, < $1M
 mderived %>% filter(Actual.Amt < 1000000) %>% ggplot(aes(x=Actual.Amt, y=..density..)) + geom_histogram(alpha=.5, bins=25) + geom_density() + scale_x_continuous(labels=scales::dollar) + labs(title="Density of solicitation actual amount (under $1M)")
 # Log transformed; remove $0 amounts
@@ -633,6 +634,8 @@ The $\text{log}_{10}$ transformation is nearly symmetric after excluding the $0 
 
 ### Modeling close amounts
 
+We can check whether the high-importance variables for predicting whether gifts close to begin with are still important for predicting the amount at which they close. Begin by $\text{log}_{10}$ transforming `Actual.Amt` and dropping all values $<=0$; this gives the observed conditional distribution $E(Sol_{i}\text{ value}|Sol_{i}\text{ closed})$ as required. Now, growing regression forests on the transformed gift amounts:
+
 ```{r, echo=F, message=F, warning=F, cache=F}
 # Censored log transformation
 log_censor <- function(x, base=exp(1)) {
@@ -640,17 +643,92 @@ log_censor <- function(x, base=exp(1)) {
   return(x)
 }
 
-# Data setup
-mderived <- mderived %>% mutate(Actual.Amt.lt = Actual.Amt %>% log_censor(base=10))
-# Random sample of dataset
+# Data setup; only use through end of FY15 for fair comparisons
+holdout <- mderived %>% filter(Final.Sol.Stage.Dt >= mdy("07/01/2015"))
+mderived <- mderived %>% mutate(Actual.Amt.lt = Actual.Amt %>% log_censor(base=10)) %>% filter(Final.Sol.Stage.Dt <= mdy("06/30/2015"))
 lmdat <- mderived %>% filter(Actual.Amt > 0)
-set.seed(1053622)
-rand <- sample(1:nrow(lmdat), size=nrow(lmdat))
 
-# Model
-lm.sol.close <- lmdat %>% lm(Actual.Amt.lt ~ lt.Planned.Amt + lt.Expected.Amt + Sol.Type.Agg, data=.)
-summary(lm.sol.close)
+## Random forests
+library(randomForest)
+set.seed(51906)
+# Planned stage forest
+treedat <- na.omit(lmdat[,c("Actual.Amt.lt", head.all, head.plan)])
+rf.plan <- randomForest(Actual.Amt.lt ~ ., data=treedat, importance=T)
+# Clear stage forest
+treedat <- na.omit(lmdat[,c("Actual.Amt.lt", head.all, head.clear)])
+rf.clear <- randomForest(Actual.Amt.lt ~ ., data=treedat, importance=T)
+# Ask stage forest
+treedat <- na.omit(lmdat[,c("Actual.Amt.lt", head.all, head.ask)])
+rf.ask <- randomForest(Actual.Amt.lt ~ ., data=treedat, importance=T)
+# Oral stage forest
+treedat <- na.omit(lmdat[,c("Actual.Amt.lt", head.all, head.oral)])
+rf.oral <- randomForest(Actual.Amt.lt ~ ., data=treedat, importance=T)
 
-lm.sol.preds <- predict(lm.sol.close, newdata=mderived)
-#plot(mderived$Actual.Amt.lt ~ lm.sol.preds); abline(0,1)
+## Coerce importances into a data frame
+imp.plan <- importance(rf.plan, scale=F, type=1)
+imp.clear <- importance(rf.clear, scale=F, type=1)
+imp.ask <- importance(rf.ask, scale=F, type=1)
+imp.oral <- importance(rf.oral, scale=F, type=1)
+rf.importances <- rbind(data.frame(Model="Plan", imp.plan, Variable=rownames(imp.plan)), data.frame(Model="Clear", imp.clear, Variable=rownames(imp.clear)), data.frame(Model="Ask", imp.ask, Variable=rownames(imp.ask)), data.frame(Model="Oral", imp.oral, Variable=rownames(imp.oral)), make.row.names=F)
+## Plot importances
+# y axis will end at nearest .05 above the maximum in the data
+top <- ceiling(max(rf.importances$X.IncMSE)*20)/20
+ggplot(rf.importances, aes(x=Variable, y=X.IncMSE, color=Model, group=Model)) + geom_point() + geom_line() + theme(axis.text.x=element_text(angle=90, hjust=1)) + labs(title="Random forest variable importances", y="Mean Decrease in Accuracy") + scale_y_continuous(breaks=seq(0, top, by=.05))
+```
+
+  * `Expected.Amt` is extremely important. `Planned.Amt` and `Ask.Amt` are also helpful where available.
+  * `Solicitation.Type.Desc` is slightly helpful in the Plan and Clear stages, but not afterward.
+  * The future variables, and month the indicated stage was hit, are not helpful as continuous covariates using the tree method. This follows given that we're looking only at conditional giving.
+
+Using the `leaps` package for variable selection:
+
+```{r, echo=F, message=F, warning=F, cache=F}
+library(leaps)
+# Plan
+lm.leaps <- lmdat %>% regsubsets(Actual.Amt.lt ~ log10(Expected.Amt) + log10(Planned.Amt) + Plan.Future + planning.fiscal.mo + Sol.Type.Agg, data=., nvmax=16)
+rsubs1 <- summary(lm.leaps)
+rsubsdf <- data.frame(model="Plan", bic=rsubs1$bic, p=(1:length(rsubs1$bic)))
+# Clear
+lm.leaps <- lmdat %>% regsubsets(Actual.Amt.lt ~ log10(Expected.Amt) + log10(Planned.Amt) + Sol.Type.Agg + clear.fiscal.mo + Clear.Future, data=., nvmax=16)
+rsubs2 <- summary(lm.leaps)
+rsubsdf <- rbind(rsubsdf, data.frame(model="Clear", bic=rsubs2$bic, p=(1:length(rsubs2$bic))))
+# Ask
+lm.leaps <- lmdat %>% filter(Ask.Amt > 0) %>% regsubsets(Actual.Amt.lt ~ log10(Expected.Amt) + log10(Planned.Amt) + Sol.Type.Agg + log10(Ask.Amt) + ask.fiscal.mo + Ask.Future, data=., nvmax=16)
+rsubs3 <- summary(lm.leaps)
+rsubsdf <- rbind(rsubsdf, data.frame(model="Ask", bic=rsubs3$bic, p=(1:length(rsubs3$bic))))
+# Oral
+lm.leaps <- lmdat %>% filter(Ask.Amt > 0) %>% regsubsets(Actual.Amt.lt ~ log10(Expected.Amt) + log10(Planned.Amt) + Sol.Type.Agg + log10(Ask.Amt) + oral.fiscal.mo + Oral.Future, data=., nvmax=16)
+rsubs4 <- summary(lm.leaps)
+rsubsdf <- rbind(rsubsdf, data.frame(model="Oral", bic=rsubs4$bic, p=(1:length(rsubs4$bic))))
+
+# Plot BIC
+rsubsdf %>% ggplot(aes(x=p, y=bic, color=model)) + geom_point(alpha=.5) + geom_line(alpha=.25) + labs(title="BIC for different model sizes") + facet_grid(. ~ model)
+```
+
+Across the board, two predictors are optimal. Let's see which they are.
+
+```{r, echo=F, message=F, warning=F, cache=F}
+tmp <- colnames(rsubs1$which)[rsubs1$which[2, ]]
+tmp <- tmp %>% rbind(colnames(rsubs2$which)[rsubs2$which[2, ]])
+tmp <- tmp %>% rbind(colnames(rsubs3$which)[rsubs3$which[2, ]])
+tmp <- tmp %>% rbind(colnames(rsubs4$which)[rsubs4$which[2, ]])
+rownames(tmp) <- c("Plan", "Clear", "Ask", "Oral")
+colnames(tmp) <- c("V0", "V1", "V2")
+tmp %>% kable()
+```
+
+For simplicity's sake, we can use the transformed `Expected.Amt` and corresponding `Stage.Future` for each of the models. Now, calculating predicted amounts for the held-out FY16 data:
+
+```{r, echo=F, message=F, warning=F, cache=F}
+# Modeling with all data
+lm.p <- lmdat %>% lm(Actual.Amt.lt ~ log10(Expected.Amt) + Plan.Future, data=.)
+lm.c <- lmdat %>% lm(Actual.Amt.lt ~ log10(Expected.Amt) + Clear.Future, data=.)
+lm.a <- lmdat %>% lm(Actual.Amt.lt ~ log10(Expected.Amt) + Ask.Future, data=.)
+lm.o <- lmdat %>% lm(Actual.Amt.lt ~ log10(Expected.Amt) + Oral.Future, data=.)
+
+# Predicted log10 actual amounts
+# predict(lm.p, newdata=holdout)
+# predict(lm.c, newdata=holdout)
+# predict(lm.a, newdata=holdout)
+# predict(lm.o, newdata=holdout)
 ```

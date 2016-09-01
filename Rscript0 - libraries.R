@@ -12,3 +12,5 @@ library(knitr)
 library(gridExtra)
 # Misc
 library(devtools)
+# My package!
+library(wranglR)
