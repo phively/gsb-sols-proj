@@ -717,18 +717,26 @@ colnames(tmp) <- c("V0", "V1", "V2")
 tmp %>% kable()
 ```
 
-For simplicity's sake, we can use the transformed `Expected.Amt` and corresponding `Stage.Future` for each of the models. Now, calculating predicted amounts for the held-out FY16 data:
+For simplicity's sake, we can use the transformed `Expected.Amt` and corresponding `Stage.Future` in each of the models, plus the interaction. Now, calculating predicted amounts for the held-out FY16 data:
 
 ```{r, echo=F, message=F, warning=F, cache=F}
 # Modeling with all data
-lm.p <- lmdat %>% lm(Actual.Amt.lt ~ log10(Expected.Amt) + Plan.Future, data=.)
-lm.c <- lmdat %>% lm(Actual.Amt.lt ~ log10(Expected.Amt) + Clear.Future, data=.)
-lm.a <- lmdat %>% lm(Actual.Amt.lt ~ log10(Expected.Amt) + Ask.Future, data=.)
-lm.o <- lmdat %>% lm(Actual.Amt.lt ~ log10(Expected.Amt) + Oral.Future, data=.)
+lm.p <- lmdat %>% lm(Actual.Amt.lt ~ log10(Expected.Amt) * Plan.Future, data=.)
+lm.c <- lmdat %>% lm(Actual.Amt.lt ~ log10(Expected.Amt) * Clear.Future, data=.)
+lm.a <- lmdat %>% lm(Actual.Amt.lt ~ log10(Expected.Amt) * Ask.Future, data=.)
+lm.o <- lmdat %>% lm(Actual.Amt.lt ~ log10(Expected.Amt) * Oral.Future, data=.)
 
 # Predicted log10 actual amounts
-# predict(lm.p, newdata=holdout)
-# predict(lm.c, newdata=holdout)
-# predict(lm.a, newdata=holdout)
-# predict(lm.o, newdata=holdout)
+holdout <- holdout %>% mutate(
+  lmpreds.pln = predict(lm.p, newdata=holdout),
+  lmpreds.pln = ifelse(lmpreds.pln == -Inf, 0, lmpreds.pln),
+  lmpreds.clr = predict(lm.c, newdata=holdout),
+  lmpreds.clr = ifelse(lmpreds.clr == -Inf, 0, lmpreds.clr),
+  lmpreds.ask = predict(lm.a, newdata=holdout),
+  lmpreds.ask = ifelse(lmpreds.ask == -Inf, 0, lmpreds.ask),
+  lmpreds.ora = predict(lm.o, newdata=holdout),
+  lmpreds.ora = ifelse(lmpreds.ora == -Inf, 0, lmpreds.ora)
+)
+
+
 ```
